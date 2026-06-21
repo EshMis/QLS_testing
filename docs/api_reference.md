@@ -1,0 +1,31 @@
+# API reference
+
+## Core types
+
+- `PolynomialSystem`: sparse polynomial vector field, variable names, and initial state.
+- `LinearizedSystem`: lifted matrix, basis, metadata, and physical projection.
+- `SolveResult`: solution plus absolute/relative residual and backend metadata.
+- `IntegrationResult`: time grid, lifted states, and all solve diagnostics.
+- `ExperimentResult`: configuration, pipeline output, reference solution, and errors.
+
+## Main entry points
+
+```python
+from qls_testing import load_config, run_experiment
+
+config = load_config("configs/default.yaml")
+result = run_experiment(config)
+print(result.metrics)
+```
+
+`CarlemanLinearization.linearize(system)` constructs a lift.
+Every `Integrator.integrate(...)` accepts that lift and a `LinearSolver`.
+`trajectory_figure(result)` returns a Plotly figure without rerunning the model.
+
+## Registries
+
+`LINEARIZATIONS`, `INTEGRATORS`, and `QLS_SOLVERS` support `register(name,
+factory)`, `create(name, **settings)`, and `.names`. Registrations are explicit
+in each component package's `__init__.py`; entry-point discovery is intentionally
+deferred until third-party plugins are needed.
+

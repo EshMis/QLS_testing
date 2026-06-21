@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qls-testing"
+version = "0.1.0"
+description = "Carleman-linearized dynamical systems and extensible quantum linear-solver experiments"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "PyYAML>=6.0",
+  "plotly>=5.18",
+]
+
+[project.optional-dependencies]
+app = ["streamlit>=1.31"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
+quantum = ["pennylane>=0.36", "pyqsp>=0.2"]
+
+[project.scripts]
+qls-run = "qls_testing.experiments.run_experiment:main"
+
+[tool.setuptools.packages.find]
+include = ["qls_testing*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["notebooks"]
