@@ -33,6 +33,18 @@ class Integrator(ABC):
         t_final: float,
         dt: float,
         n_points: int | None = None,
+        **options: Any,
     ) -> IntegrationResult:
         """Evolve a lifted linear system."""
 
+
+class ErrorModel(ABC):
+    @abstractmethod
+    def estimate(self, **context: Any) -> Any:
+        """Return staged approximation errors, preferably resolved in time."""
+
+
+class ComplexityEstimator(ABC):
+    @abstractmethod
+    def estimate(self, **context: Any) -> Any:
+        """Return classical and quantum cost proxies for one experiment."""

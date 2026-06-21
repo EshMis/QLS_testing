@@ -58,3 +58,22 @@ Every discrete method records condition numbers and per-solve residuals.
 `t_final` must be an integer multiple of `dt`; silently rounding the notebook's
 number of steps was removed because it can change the requested final time.
 
+## Sparse Krylov exponential action
+
+`krylov_exponential` evaluates \(e^{tA}y_0\) with `scipy.sparse.linalg.expm_multiply`
+without forming the dense exponential. For Krylov dimension \(m\), one action
+has the rough sparse cost
+
+\[
+O(m\,\mathrm{nnz}(A))+O(m^3),
+\]
+
+with backend-selected scaling and convergence controls. `n_points` controls
+recording, not the internal stable step sequence.
+
+## Adaptive RK controls
+
+`rk45` passes `rtol`, `atol`, and `max_step` to SciPy's embedded adaptive
+Runge--Kutta method. `min_step` is validated and recorded but SciPy RK45 does not
+enforce it directly. `output_stride` thins recorded states while retaining the
+final point. Adaptive RK is a reference path rather than a QLS discretization.

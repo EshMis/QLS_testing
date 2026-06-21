@@ -75,8 +75,34 @@ pipeline against the original rational QSSA system.
 
 ## Assumptions and diagnostics
 
-The current basis excludes the constant monomial and therefore accepts systems
-without forcing terms. Affine systems can be supported later by adding a fixed
-homogeneous coordinate. `dropped_term_count`, matrix sparsity, basis labels, and
+The standard basis excludes the constant monomial. Affine systems automatically add a fixed homogeneous coordinate
+\(y_{const}=1\) as the last basis entry. `dropped_term_count`, matrix sparsity, basis labels, and
 the exact exponent ordering are retained in `LinearizedSystem.metadata`.
 
+## Moving operating points
+
+For QSSA flux \(v(x)=Vx/(K+x)\), write \(x=c+z\). The coefficients are
+
+\[
+v(c)=\frac{Vc}{K+c},\qquad
+\frac{v^{(j)}(c)}{j!}=\frac{VK(-1)^{j-1}}{(K+c)^{j+1}},\quad j\ge1.
+\]
+
+The trust radius becomes \(|z|<K+c\). Centering the first substrate at its
+initial value changes the notebook default from \(|S/K|=1.5>1\) to \(z=0\),
+inside the local series. `qssa_expansion: auto` falls back to this expansion
+when the zero-centered series is invalid. Physical projection adds \(c\) back.
+
+## Adaptive restart
+
+`AdaptiveRestartedCarleman` compares orders \(N\) and \(N+1\) at each segment
+endpoint,
+
+\[
+e_N=\|P y_{N+1}(t_{r+1})-P y_N(t_{r+1})\|_2,
+\]
+
+increasing order until \(e_N\le\tau\) or `max_order` is reached. The accepted
+physical endpoint is re-embedded before the next segment. This restores exact
+monomial consistency at restart times, but the order-difference estimate is
+heuristic and doubles work while adapting.

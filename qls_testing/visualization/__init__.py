@@ -1,6 +1,6 @@
 """Plotly and Streamlit presentation layers."""
 
-from .plotters import trajectory_figure
+from .plotters import error_figure, lindblad_figure, trajectory_figure, variable_figure
 
-__all__ = ["trajectory_figure"]
+__all__ = ["error_figure", "lindblad_figure", "trajectory_figure", "variable_figure"]
 

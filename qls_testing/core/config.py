@@ -29,6 +29,11 @@ class SystemConfig:
     kcat: tuple[float, ...] = (3.0, 2.0, 2.5, 4.0)
     enzyme_total: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0)
     taylor_degree: int = 3
+    qssa_expansion: str = "moving_point"
+    qssa_fallback: str = "moving_point"
+    moving_point: tuple[float, ...] | None = None
+    toy_coupling: float = 0.5
+    lindblad_decay_rate: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -42,6 +47,22 @@ class TimeConfig:
     t_final: float = 5.0
     dt: float = 0.1
     n_points: int = 101
+    rtol: float = 1e-7
+    atol: float = 1e-9
+    min_step: float = 1e-6
+    max_step: float | None = None
+    output_stride: int = 1
+
+
+@dataclass(frozen=True)
+class ErrorConfig:
+    enabled: bool = True
+    compute_stage_proxies: bool = True
+
+
+@dataclass(frozen=True)
+class ComplexityConfig:
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -59,6 +80,8 @@ class Config:
     qls: MethodConfig = field(default_factory=lambda: MethodConfig("classical"))
     time: TimeConfig = field(default_factory=TimeConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    error: ErrorConfig = field(default_factory=ErrorConfig)
+    complexity: ComplexityConfig = field(default_factory=ComplexityConfig)
     random_seed: int = 42
 
     def validate(self) -> "Config":
@@ -71,6 +94,14 @@ class Config:
             raise ValueError("taylor_degree must be >= 1")
         if self.time.t_final <= 0 or self.time.dt <= 0 or self.time.n_points < 2:
             raise ValueError("time values must be positive and n_points >= 2")
+        if self.time.rtol <= 0 or self.time.atol <= 0 or self.time.min_step <= 0:
+            raise ValueError("time tolerances and min_step must be positive")
+        if self.time.max_step is not None and self.time.max_step < self.time.min_step:
+            raise ValueError("max_step must be >= min_step")
+        if self.time.output_stride < 1:
+            raise ValueError("output_stride must be >= 1")
+        if self.system.qssa_expansion not in {"zero", "moving_point", "auto"}:
+            raise ValueError("qssa_expansion must be zero, moving_point, or auto")
         order = self.linearization.settings.get("order", 2)
         if not isinstance(order, int) or order < 1:
             raise ValueError("Carleman order must be a positive integer")
@@ -82,7 +113,10 @@ def load_config(path: str | Path) -> Config:
     config_path = Path(path)
     with config_path.open(encoding="utf-8") as stream:
         raw = yaml.safe_load(stream) or {}
-    allowed = {"system", "linearization", "integrator", "qls", "time", "output", "random_seed"}
+    allowed = {
+        "system", "linearization", "integrator", "qls", "time", "output",
+        "error", "complexity", "random_seed",
+    }
     unknown = set(raw) - allowed
     if unknown:
         raise ValueError(f"unknown top-level config setting(s): {sorted(unknown)}")
@@ -93,7 +127,8 @@ def load_config(path: str | Path) -> Config:
         qls=_construct(MethodConfig, raw.get("qls") or {"name": "classical"}),
         time=_construct(TimeConfig, raw.get("time")),
         output=_construct(OutputConfig, raw.get("output")),
+        error=_construct(ErrorConfig, raw.get("error")),
+        complexity=_construct(ComplexityConfig, raw.get("complexity")),
         random_seed=raw.get("random_seed", 42),
     )
     return config.validate()
-

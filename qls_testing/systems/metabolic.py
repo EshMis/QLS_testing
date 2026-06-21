@@ -92,6 +92,69 @@ def build_qssa_taylor_pathway(config: SystemConfig) -> PolynomialSystem:
     )
 
 
+def build_qssa_moving_point_pathway(config: SystemConfig) -> PolynomialSystem:
+    """Taylor-expand each QSSA flux around a configurable operating point.
+
+    Coordinates are deviations ``z=x-center``. The physical projection adds
+    ``center`` back, and a homogeneous Carleman coordinate carries constant
+    flux terms. Restarting with the latest state as center is the moving-point
+    update rule used by the adaptive controller.
+    """
+    n = 5
+    if config.moving_point is None:
+        center = np.asarray([config.initial_substrate, 0.0, 0.0, 0.0, 0.0])
+    else:
+        center = np.asarray(config.moving_point, dtype=float)
+        if center.shape != (5,):
+            raise ValueError("moving_point must contain five QSSA state values")
+    equations = [dict() for _ in range(n)]
+    vmax = np.asarray(config.kcat) * np.asarray(config.enzyme_total)
+    km = (np.asarray(config.k_minus_1) + np.asarray(config.kcat)) / np.asarray(config.k1)
+    zero = (0,) * n
+    for reaction in range(4):
+        c = center[reaction]
+        coefficients = [vmax[reaction] * c / (km[reaction] + c)]
+        coefficients.extend(
+            vmax[reaction] * km[reaction] * (-1) ** (degree - 1)
+            / (km[reaction] + c) ** (degree + 1)
+            for degree in range(1, config.taylor_degree + 1)
+        )
+        _add(equations[reaction], zero, -coefficients[0])
+        _add(equations[reaction + 1], zero, coefficients[0])
+        for degree, coefficient in enumerate(coefficients[1:], start=1):
+            exponent = _unit(n, reaction, degree)
+            _add(equations[reaction], exponent, -coefficient)
+            _add(equations[reaction + 1], exponent, coefficient)
+    physical_initial = np.asarray([config.initial_substrate, 0.0, 0.0, 0.0, 0.0])
+    return PolynomialSystem(
+        variable_names=("S", "X1", "X2", "X3", "P"),
+        terms=tuple(equations),
+        initial_state=physical_initial - center,
+        metadata={
+            "model": "qssa_moving_point_pathway",
+            "degree": config.taylor_degree,
+            "km": km.tolist(),
+            "expansion_center": center.tolist(),
+            "projection_offset": center.tolist(),
+            "trust_radius": (km + center[:4]).tolist(),
+            "series_valid_initially": True,
+        },
+    )
+
+
+def build_qssa_pathway(config: SystemConfig) -> PolynomialSystem:
+    """Select zero-centered or safeguarded moving-point QSSA expansion."""
+    if config.qssa_expansion == "moving_point":
+        return build_qssa_moving_point_pathway(config)
+    zero_centered = build_qssa_taylor_pathway(config)
+    invalid = not zero_centered.metadata["series_valid_initially"]
+    if config.qssa_expansion == "auto" and invalid:
+        if config.qssa_fallback == "moving_point":
+            return build_qssa_moving_point_pathway(config)
+        raise ValueError("zero-centered QSSA Taylor series starts outside its trust region")
+    return zero_centered
+
+
 def qssa_rhs(config: SystemConfig, state: np.ndarray) -> np.ndarray:
     """Evaluate the unapproximated rational QSSA model for reference solutions."""
     substrate = np.asarray(state[:4])
@@ -99,4 +162,3 @@ def qssa_rhs(config: SystemConfig, state: np.ndarray) -> np.ndarray:
     km = (np.asarray(config.k_minus_1) + np.asarray(config.kcat)) / np.asarray(config.k1)
     rates = vmax * substrate / (km + substrate)
     return np.asarray((-rates[0], rates[0] - rates[1], rates[1] - rates[2], rates[2] - rates[3], rates[3]))
-

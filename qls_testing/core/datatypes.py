@@ -16,7 +16,8 @@ class PolynomialSystem:
     """Autonomous polynomial ODE ``x' = f(x)`` in sparse monomial form.
 
     ``terms[i][alpha]`` is the coefficient of ``x**alpha`` in ``f_i``.
-    Constant terms are deliberately excluded because the lifted basis omits 1.
+    Constant terms are supported through a homogeneous coordinate added by the
+    linearizer when needed.
     """
 
     variable_names: tuple[str, ...]
@@ -32,8 +33,6 @@ class PolynomialSystem:
             for exponent in equation:
                 if len(exponent) != n or any(value < 0 for value in exponent):
                     raise ValueError(f"invalid monomial exponent {exponent}")
-                if sum(exponent) == 0:
-                    raise ValueError("constant terms require an affine/homogeneous lift")
 
     def evaluate(self, state: NDArray[np.float64]) -> NDArray[np.float64]:
         """Evaluate the polynomial vector field."""
@@ -56,7 +55,9 @@ class LinearizedSystem:
 
     def project(self, lifted_states: NDArray[np.number]) -> NDArray[np.number]:
         """Return degree-one coordinates in original variable order."""
-        return np.asarray(lifted_states)[..., : self.physical_dimension]
+        values = np.asarray(lifted_states)[..., : self.physical_dimension]
+        offset = np.asarray(self.metadata.get("projection_offset", 0.0))
+        return values + offset
 
 
 @dataclass(frozen=True)
@@ -84,3 +85,5 @@ class ExperimentResult:
     reference_times: NDArray[np.float64]
     reference_states: NDArray[np.float64]
     metrics: dict[str, Any]
+    error_report: Any | None = None
+    complexity_report: Any | None = None

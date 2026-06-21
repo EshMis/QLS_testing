@@ -44,8 +44,11 @@ class CarlemanLinearization(LinearizationMethod):
     def linearize(self, system: PolynomialSystem, **settings: object) -> LinearizedSystem:
         n = len(system.variable_names)
         exponents = enumerate_monomials(n, self.order)
+        has_constant = any(sum(exponent) == 0 for equation in system.terms for exponent in equation)
+        if has_constant:
+            exponents = exponents + ((0,) * n,)
         expected = sum(comb(n + degree - 1, degree) for degree in range(1, self.order + 1))
-        assert len(exponents) == expected
+        assert len(exponents) == expected + int(has_constant)
         index = {exponent: column for column, exponent in enumerate(exponents)}
         matrix = np.zeros((len(exponents), len(exponents)))
         dropped = 0
@@ -76,6 +79,7 @@ class CarlemanLinearization(LinearizationMethod):
                 "order": self.order,
                 "lifted_dimension": len(exponents),
                 "dropped_term_count": dropped,
+                "homogeneous_coordinate": has_constant,
                 "sparsity": float(1.0 - np.count_nonzero(matrix) / matrix.size),
             },
         )
@@ -88,5 +92,4 @@ def _label(exponent: Exponent, names: tuple[str, ...]) -> str:
             parts.append(name)
         elif power > 1:
             parts.append(f"{name}^{power}")
-    return "*".join(parts)
-
+    return "*".join(parts) or "1"

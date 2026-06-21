@@ -2,6 +2,7 @@ system:
   name: qssa_taylor_pathway
   initial_substrate: 3.0
   taylor_degree: 3
+  qssa_expansion: moving_point
 linearization:
   name: carleman
   settings: {order: 3}

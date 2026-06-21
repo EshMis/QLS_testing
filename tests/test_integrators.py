@@ -3,7 +3,12 @@ import pytest
 from scipy.linalg import expm
 
 from qls_testing.core.datatypes import LinearizedSystem
-from qls_testing.integrators.linear import BDF2Integrator, BackwardEulerIntegrator, CrankNicolsonIntegrator
+from qls_testing.integrators.linear import (
+    BDF2Integrator,
+    BackwardEulerIntegrator,
+    CrankNicolsonIntegrator,
+    KrylovExponentialIntegrator,
+)
 from qls_testing.qls.classical import ClassicalSolver
 
 
@@ -37,3 +42,12 @@ def test_crank_nicolson_harmonic_oscillator():
     expected = np.array([np.cos(1.0), -np.sin(1.0)])
     assert np.linalg.norm(result.states[-1] - expected) < 3e-6
 
+
+def test_sparse_krylov_matches_analytic_exponential():
+    matrix = np.diag([-1.0, -2.0, -3.0])
+    initial = np.array([1.0, 2.0, -1.0])
+    result = KrylovExponentialIntegrator().integrate(
+        linear_system(matrix, initial), ClassicalSolver(), t_final=1.0, dt=0.1, n_points=11
+    )
+    np.testing.assert_allclose(result.states[-1], np.exp([-1.0, -2.0, -3.0]) * initial, atol=1e-12)
+    assert result.metadata["nnz"] == 3

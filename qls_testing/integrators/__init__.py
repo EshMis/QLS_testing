@@ -8,6 +8,7 @@ from .linear import (
     CrankNicolsonIntegrator,
     ExponentialIntegrator,
     FoldedBackwardEulerIntegrator,
+    KrylovExponentialIntegrator,
     Pade22Integrator,
     RK45Integrator,
 )
@@ -19,9 +20,10 @@ INTEGRATORS.register("folded_backward_euler", FoldedBackwardEulerIntegrator)
 INTEGRATORS.register("pade22", Pade22Integrator)
 INTEGRATORS.register("rk45", RK45Integrator)
 INTEGRATORS.register("exponential", ExponentialIntegrator)
+INTEGRATORS.register("krylov_exponential", KrylovExponentialIntegrator)
 
 __all__ = [
     "BDF2Integrator", "BackwardEulerIntegrator", "CrankNicolsonIntegrator",
-    "ExponentialIntegrator", "FoldedBackwardEulerIntegrator", "Pade22Integrator", "RK45Integrator",
+    "ExponentialIntegrator", "FoldedBackwardEulerIntegrator", "KrylovExponentialIntegrator",
+    "Pade22Integrator", "RK45Integrator",
 ]
-

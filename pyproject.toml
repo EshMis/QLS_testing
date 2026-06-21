@@ -17,9 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-app = ["streamlit>=1.31"]
+app = ["streamlit>=1.35", "kaleido>=0.2"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
-quantum = ["pennylane>=0.36", "pyqsp>=0.2"]
+quantum = ["pennylane>=0.40"]
+qsp = ["pyqsp>=0.2"]
 
 [project.scripts]
 qls-run = "qls_testing.experiments.run_experiment:main"

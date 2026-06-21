@@ -6,6 +6,8 @@ system:
   kcat: [3.0, 2.0, 2.5, 4.0]
   enzyme_total: [1.0, 1.0, 1.0, 1.0]
   taylor_degree: 3
+  qssa_expansion: moving_point
+  qssa_fallback: moving_point
 
 linearization:
   name: carleman
@@ -24,11 +26,22 @@ time:
   t_final: 5.0
   dt: 0.1
   n_points: 101
+  rtol: 1.0e-7
+  atol: 1.0e-9
+  min_step: 1.0e-6
+  max_step: null
+  output_stride: 1
 
 output:
   directory: outputs
   save_plot: true
   show_plot: false
 
-random_seed: 42
+error:
+  enabled: true
+  compute_stage_proxies: true
 
+complexity:
+  enabled: true
+
+random_seed: 42

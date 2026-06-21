@@ -12,7 +12,7 @@ Python 3.10 or newer is supported (3.11+ recommended).
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev,app]'
+python -m pip install -e '.[dev,app,quantum]'
 python scripts/run_from_cli.py --config configs/default.yaml
 ```
 
@@ -28,6 +28,27 @@ For interactive parameter controls:
 
 ```bash
 streamlit run qls_testing/visualization/app_streamlit.py
+```
+
+The dashboard provides overview and per-lifted-variable views, point selection,
+hover/zoom, staged error curves, complexity proxies, and CSV/NPZ/HTML exports.
+PDF export is available from the non-interactive script when Kaleido is installed:
+
+```bash
+python scripts/generate_plots.py --config configs/default.yaml --pdf
+```
+
+Run the fast circuit-backed toy experiment, or switch to its exact baseline:
+
+```bash
+python scripts/run_from_cli.py --config configs/examples/toy_pennylane.yaml
+python scripts/run_from_cli.py --config configs/examples/toy_classical.yaml
+```
+
+The separate Lindblad pathway is:
+
+```bash
+python scripts/run_from_cli.py --config configs/examples/lindblad_amplitude_damping.yaml
 ```
 
 Run a small parameter sweep with:
@@ -46,19 +67,23 @@ of being silently ignored. See `configs/default.yaml` and `configs/examples/`.
 Available method names are:
 
 - linearization: `carleman`
+- linearization controller: `adaptive_restarted_carleman`
 - integrators: `backward_euler`, `crank_nicolson`, `bdf2`,
-  `folded_backward_euler`, `pade22`, `rk45`, `exponential`
-- solvers: `classical`, `hhl_simulator`, `qsvt_simulator`, `vqls_simulator`
+  `folded_backward_euler`, `pade22`, `rk45`, `exponential`, `krylov_exponential`
+- solvers: `classical`, `hhl_simulator`, `qsvt_simulator`, `vqls_simulator`,
+  `pennylane_vqls`, `preconditioned_qsvt`, `iterative_refinement`
 
-The three QLS methods are explicitly called *simulators*: they validate
+The algebraic QLS methods are explicitly called *simulators*: they validate
 preprocessing, inverse transformations, scaling, and residuals but make no
 quantum-speedup or hardware claim. PennyLane and pyQSP remain optional research
-dependencies (`pip install -e '.[quantum]'`); the original circuits are retained
-in the source notebook while hardware adapters can be added behind `LinearSolver`.
+dependencies. `pennylane_vqls` is a working `default.qubit` circuit backend for
+tiny real systems. Full-vector readout remains a simulator-only verification
+convenience, not a quantum complexity claim.
 
 ## Architecture and extension
 
-Each method implements one interface in `qls_testing/core/interfaces.py` and is
+Each method implements `LinearizationMethod`, `Integrator`, `LinearSolver`,
+`QuantumLinearSolver`, `ErrorModel`, or `ComplexityEstimator` and is
 registered in `qls_testing/experiments/registry.py`. To add a method:
 
 1. implement `LinearizationMethod`, `Integrator`, or `LinearSolver` in a new module;
@@ -88,6 +113,9 @@ pipeline suitable for CI.
 - [Carleman linearization](docs/math/carleman_linearization.md)
 - [Integrators](docs/math/integrators.md)
 - [QLS methods](docs/math/qls_methods.md)
+- [Error decomposition and complexity](docs/math/error_and_complexity.md)
+- [PennyLane circuits](docs/math/pennylane_quantum.md)
+- [Lindblad simulation](docs/math/lindblad.md)
 - [API reference](docs/api_reference.md)
 
 ## Known limitations
@@ -103,4 +131,7 @@ pipeline suitable for CI.
   block encodings.
 - QLS output states do not reveal every classical amplitude for free. Current
   simulators return full vectors strictly for numerical verification.
-
+- Staged errors are computable discrepancy proxies, not rigorous additive upper
+  bounds; norms remove signs, so their scalar sum need not equal total error.
+- The PennyLane VQLS ansatz currently supports tiny real systems and noiseless
+  statevector optimization. Shot variance is estimated when `shots` is supplied.

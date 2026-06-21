@@ -1,0 +1,26 @@
+system:
+  name: toy_linear_ode
+  toy_coupling: 0.5
+linearization:
+  name: carleman
+  settings: {order: 1}
+integrator:
+  name: backward_euler
+qls:
+  name: pennylane_vqls
+  settings:
+    layers: 2
+    max_steps: 300
+    stepsize: 0.05
+    tolerance: 1.0e-8
+    backend: default.qubit
+time:
+  t_final: 0.2
+  dt: 0.1
+  n_points: 3
+output:
+  directory: outputs/toy_pennylane
+  save_plot: true
+error: {enabled: true}
+complexity: {enabled: true}
+random_seed: 7

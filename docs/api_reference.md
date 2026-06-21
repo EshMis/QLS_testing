@@ -7,6 +7,10 @@
 - `SolveResult`: solution plus absolute/relative residual and backend metadata.
 - `IntegrationResult`: time grid, lifted states, and all solve diagnostics.
 - `ExperimentResult`: configuration, pipeline output, reference solution, and errors.
+- `LiftedSystemModel`: lifted coordinate names, degrees, lookup, and trace access.
+- `ErrorReport`: time-resolved staged discrepancies and descriptions.
+- `ComplexityReport`: numerical/quantum proxies, asymptotics, and caveat.
+- `LindbladModel` / `LindbladResult`: separate master-equation representation.
 
 ## Main entry points
 
@@ -21,6 +25,7 @@ print(result.metrics)
 `CarlemanLinearization.linearize(system)` constructs a lift.
 Every `Integrator.integrate(...)` accepts that lift and a `LinearSolver`.
 `trajectory_figure(result)` returns a Plotly figure without rerunning the model.
+`variable_figure`, `error_figure`, and the export serializers back the dashboard.
 
 ## Registries
 
@@ -28,4 +33,3 @@ Every `Integrator.integrate(...)` accepts that lift and a `LinearSolver`.
 factory)`, `create(name, **settings)`, and `.names`. Registrations are explicit
 in each component package's `__init__.py`; entry-point discovery is intentionally
 deferred until third-party plugins are needed.
-

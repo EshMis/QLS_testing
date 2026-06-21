@@ -10,9 +10,20 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from qls_testing.core.config import Config, load_config
-from qls_testing.core.datatypes import ExperimentResult
+from qls_testing.core.datatypes import ExperimentResult, IntegrationResult
+from qls_testing.complexity import DefaultComplexityEstimator
+from qls_testing.error import PipelineErrorModel
 from qls_testing.experiments.registry import INTEGRATORS, LINEARIZATIONS, QLS_SOLVERS
-from qls_testing.systems.metabolic import build_mass_action_pathway, build_qssa_taylor_pathway, qssa_rhs
+from qls_testing.models import (
+    LindbladResult,
+    amplitude_damping_model,
+    build_toy_linear_ode,
+    simulate_lindblad,
+)
+from qls_testing.qls.classical import ClassicalSolver
+from qls_testing.linearization.carleman import CarlemanLinearization, lift_state
+from qls_testing.linearization.restarted import AdaptiveRestartedCarleman
+from qls_testing.systems.metabolic import build_mass_action_pathway, build_qssa_pathway, qssa_rhs
 
 # Import modules for their explicit registration side effects.
 import qls_testing.integrators  # noqa: F401,E402
@@ -26,34 +37,65 @@ def run_experiment(config: Config) -> ExperimentResult:
     np.random.seed(config.random_seed)
     if config.system.name == "mass_action_pathway":
         polynomial = build_mass_action_pathway(config.system)
-
-        def reference_rhs(_time: float, state: np.ndarray) -> np.ndarray:
-            return polynomial.evaluate(state)
-
     elif config.system.name == "qssa_taylor_pathway":
-        polynomial = build_qssa_taylor_pathway(config.system)
-
-        def reference_rhs(_time: float, state: np.ndarray) -> np.ndarray:
-            return qssa_rhs(config.system, state)
+        polynomial = build_qssa_pathway(config.system)
+    elif config.system.name == "toy_linear_ode":
+        polynomial = build_toy_linear_ode(config.system.toy_coupling)
     else:
-        raise ValueError("system.name must be 'mass_action_pathway' or 'qssa_taylor_pathway'")
+        raise ValueError(
+            "system.name must be mass_action_pathway, qssa_taylor_pathway, or toy_linear_ode"
+        )
 
-    linearizer = LINEARIZATIONS.create(config.linearization.name, **config.linearization.settings)
-    lifted = linearizer.linearize(polynomial)
     solver_settings = {**config.qls.settings}
-    solver_settings.setdefault("seed", config.random_seed) if config.qls.name == "vqls_simulator" else None
+    if "vqls" in config.qls.name:
+        solver_settings.setdefault("seed", config.random_seed)
     solver = QLS_SOLVERS.create(config.qls.name, **solver_settings)
     integrator = INTEGRATORS.create(config.integrator.name, **config.integrator.settings)
-    integration = integrator.integrate(
-        lifted,
-        solver,
-        t_final=config.time.t_final,
-        dt=config.time.dt,
-        n_points=config.time.n_points,
-    )
+    if config.linearization.name == "adaptive_restarted_carleman":
+        controller = AdaptiveRestartedCarleman(**config.linearization.settings)
+        restarted = controller.evolve(
+            polynomial,
+            integrator,
+            solver,
+            t_final=config.time.t_final,
+            dt=config.time.dt,
+        )
+        reporting_order = max(restarted.orders)
+        lifted = CarlemanLinearization(reporting_order).linearize(polynomial)
+        offset = np.asarray(polynomial.metadata.get("projection_offset", 0.0))
+        lifted_states = np.asarray(
+            [lift_state(state - offset, lifted.exponents) for state in restarted.physical_states]
+        )
+        integration = IntegrationResult(
+            restarted.times,
+            lifted_states,
+            restarted.solve_diagnostics,
+            {
+                "method": "adaptive_restarted_carleman",
+                "orders": restarted.orders,
+                "local_order_errors": restarted.local_order_errors.tolist(),
+            },
+        )
+    else:
+        linearizer = LINEARIZATIONS.create(
+            config.linearization.name, **config.linearization.settings
+        )
+        lifted = linearizer.linearize(polynomial)
+        integration = integrator.integrate(
+            lifted,
+            solver,
+            t_final=config.time.t_final,
+            dt=config.time.dt,
+            n_points=config.time.n_points,
+            rtol=config.time.rtol,
+            atol=config.time.atol,
+            min_step=config.time.min_step,
+            max_step=config.time.max_step,
+            output_stride=config.time.output_stride,
+        )
     physical = np.asarray(lifted.project(integration.states), dtype=float)
-    reference = solve_ivp(
-        reference_rhs,
+    polynomial_solution = solve_ivp(
+        lambda _time, state: polynomial.evaluate(state),
         (0.0, config.time.t_final),
         polynomial.initial_state,
         t_eval=integration.times,
@@ -61,9 +103,27 @@ def run_experiment(config: Config) -> ExperimentResult:
         rtol=1e-10,
         atol=1e-12,
     )
-    if not reference.success:
-        raise RuntimeError(reference.message)
-    difference = physical - reference.y.T
+    if not polynomial_solution.success:
+        raise RuntimeError(polynomial_solution.message)
+    offset = np.asarray(polynomial.metadata.get("projection_offset", 0.0))
+    polynomial_reference = polynomial_solution.y.T + offset
+    if config.system.name == "qssa_taylor_pathway":
+        physical_initial = np.asarray([config.system.initial_substrate, 0.0, 0.0, 0.0, 0.0])
+        target_solution = solve_ivp(
+            lambda _time, state: qssa_rhs(config.system, state),
+            (0.0, config.time.t_final),
+            physical_initial,
+            t_eval=integration.times,
+            method="LSODA",
+            rtol=1e-10,
+            atol=1e-12,
+        )
+        if not target_solution.success:
+            raise RuntimeError(target_solution.message)
+        target_reference = target_solution.y.T
+    else:
+        target_reference = polynomial_reference
+    difference = physical - target_reference
     solve_residuals = [item.relative_residual for item in integration.solve_diagnostics]
     metrics = {
         "rmse_by_state": np.sqrt(np.mean(np.abs(difference) ** 2, axis=0)).tolist(),
@@ -73,10 +133,59 @@ def run_experiment(config: Config) -> ExperimentResult:
         "lifted_dimension": lifted.matrix.shape[0],
         "matrix_sparsity": lifted.metadata["sparsity"],
     }
-    return ExperimentResult(config, lifted, integration, physical, reference.t, reference.y.T, metrics)
+    error_report = None
+    if config.error.enabled:
+        classical_integration = integrator.integrate(
+            lifted,
+            ClassicalSolver(),
+            t_final=config.time.t_final,
+            dt=config.time.dt,
+            n_points=config.time.n_points,
+            rtol=config.time.rtol,
+            atol=config.time.atol,
+            min_step=config.time.min_step,
+            max_step=config.time.max_step,
+            output_stride=config.time.output_stride,
+        )
+        error_report = PipelineErrorModel().estimate(
+            lifted=lifted,
+            integration=integration,
+            classical_integration=classical_integration,
+            polynomial_reference=polynomial_reference,
+            target_reference=target_reference,
+        )
+        metrics["error_components_final"] = error_report.final
+    complexity_report = None
+    if config.complexity.enabled:
+        complexity_report = DefaultComplexityEstimator().estimate(
+            lifted=lifted,
+            integration=integration,
+            integrator_name=config.integrator.name,
+            solver_name=config.qls.name,
+        )
+        metrics["complexity"] = complexity_report.to_dict()
+    return ExperimentResult(
+        config,
+        lifted,
+        integration,
+        physical,
+        integration.times,
+        target_reference,
+        metrics,
+        error_report,
+        complexity_report,
+    )
 
 
-def _summary(result: ExperimentResult) -> dict[str, object]:
+def run_lindblad_experiment(config: Config) -> LindbladResult:
+    """Run the separate open-system pathway; no QLS method is involved."""
+    if config.system.name != "lindblad_amplitude_damping":
+        raise ValueError("only lindblad_amplitude_damping is currently registered")
+    model = amplitude_damping_model(config.system.lindblad_decay_rate)
+    return simulate_lindblad(model, config.time.t_final, config.time.n_points)
+
+
+def experiment_summary(result: ExperimentResult) -> dict[str, object]:
     return {
         "system": result.config.system.name,
         "linearization": result.config.linearization.name,
@@ -84,6 +193,17 @@ def _summary(result: ExperimentResult) -> dict[str, object]:
         "solver": result.config.qls.name,
         **result.metrics,
         "linearization_metadata": result.linearized_system.metadata,
+        "errors": result.error_report.to_dict() if result.error_report else None,
+        "complexity": result.complexity_report.to_dict() if result.complexity_report else None,
+    }
+
+
+def lindblad_summary(result: LindbladResult) -> dict[str, object]:
+    return {
+        **result.metadata,
+        "final_populations": result.populations[-1].tolist(),
+        "max_trace_error": float(np.max(result.trace_error)),
+        "minimum_density_eigenvalue": float(np.min(result.minimum_eigenvalue)),
     }
 
 
@@ -93,16 +213,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-plot", action="store_true")
     args = parser.parse_args(argv)
     config = load_config(args.config)
-    result = run_experiment(config)
+    is_lindblad = config.system.name.startswith("lindblad_")
+    result = run_lindblad_experiment(config) if is_lindblad else run_experiment(config)
     output = Path(config.output.directory)
     output.mkdir(parents=True, exist_ok=True)
     summary_path = output / "summary.json"
-    summary_path.write_text(json.dumps(_summary(result), indent=2), encoding="utf-8")
+    summary = lindblad_summary(result) if is_lindblad else experiment_summary(result)
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     if config.output.save_plot and not args.no_plot:
-        from qls_testing.visualization.plotters import trajectory_figure
+        from qls_testing.visualization.plotters import lindblad_figure, trajectory_figure
 
-        trajectory_figure(result).write_html(output / "trajectories.html")
-    print(json.dumps(_summary(result), indent=2))
+        figure = lindblad_figure(result) if is_lindblad else trajectory_figure(result)
+        figure.write_html(output / "trajectories.html")
+    print(json.dumps(summary, indent=2))
     return 0
 
 
