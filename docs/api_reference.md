@@ -11,6 +11,8 @@
 - `ErrorReport`: time-resolved staged discrepancies and descriptions.
 - `ComplexityReport`: numerical/quantum proxies, asymptotics, and caveat.
 - `LindbladModel` / `LindbladResult`: separate master-equation representation.
+- `NDMELindbladResult`: PDF-based off-diagonal encoding, extraction, and physicality diagnostics.
+- `PracticeSystem`: exact-reference matrix benchmark plus structural metadata.
 
 ## Main entry points
 

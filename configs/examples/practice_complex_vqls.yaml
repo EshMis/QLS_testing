@@ -1,0 +1,13 @@
+system: {name: practice_complex_damped_2}
+linearization: {name: carleman, settings: {order: 1}}
+integrator: {name: backward_euler}
+qls:
+  name: pennylane_complex_vqls
+  settings:
+    layers: 3
+    max_steps: 350
+    stepsize: 0.04
+    tolerance: 1.0e-7
+time: {t_final: 0.1, dt: 0.1, n_points: 2}
+output: {directory: outputs/practice_complex_vqls, save_plot: true}
+random_seed: 3

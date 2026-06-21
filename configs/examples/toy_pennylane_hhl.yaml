@@ -1,0 +1,10 @@
+system: {name: toy_linear_ode, toy_coupling: 0.5}
+linearization: {name: carleman, settings: {order: 1}}
+integrator: {name: backward_euler}
+qls:
+  name: pennylane_hhl
+  settings: {n_clock: 7, shots: null}
+time: {t_final: 0.2, dt: 0.1, n_points: 3}
+output: {directory: outputs/toy_pennylane_hhl, save_plot: true}
+random_seed: 7
+

@@ -16,6 +16,13 @@ python -m pip install -e '.[dev,app,quantum]'
 python scripts/run_from_cli.py --config configs/default.yaml
 ```
 
+Override individual YAML values without editing the file:
+
+```bash
+python scripts/run_from_cli.py --config configs/default.yaml \
+  --set time.dt=0.05 --set linearization.settings.order=3
+```
+
 The run writes `outputs/summary.json` and an interactive
 `outputs/trajectories.html`. To exercise the complete Carleman → backward Euler
 → idealized HHL path on a tiny case:
@@ -30,8 +37,10 @@ For interactive parameter controls:
 streamlit run qls_testing/visualization/app_streamlit.py
 ```
 
-The dashboard provides overview and per-lifted-variable views, point selection,
-hover/zoom, staged error curves, complexity proxies, and CSV/NPZ/HTML exports.
+The dashboard defaults to separate physical `S`, `Xs`, `P`, and `Cs`
+pipeline/reference/error graphs. It provides point inspection, hover/zoom,
+staged errors, LaTeX math and complexity, CSV/NPZ/HTML exports, and keeps lifted
+coordinates under Advanced / Debug.
 PDF export is available from the non-interactive script when Kaleido is installed:
 
 ```bash
@@ -48,7 +57,18 @@ python scripts/run_from_cli.py --config configs/examples/toy_classical.yaml
 The separate Lindblad pathway is:
 
 ```bash
-python scripts/run_from_cli.py --config configs/examples/lindblad_amplitude_damping.yaml
+python scripts/run_from_cli.py --config configs/examples/lindblad_enzyme_ndme.yaml
+```
+
+This implements the supplied PRL paper's nondiagonal density-matrix encoding on
+the reduced order-1 nine-variable enzyme model and compares all physical
+variables against the exact reduced-model exponential.
+
+Working PennyLane HHL and QSVT demos:
+
+```bash
+python scripts/run_from_cli.py --config configs/examples/toy_pennylane_hhl.yaml
+python scripts/run_from_cli.py --config configs/examples/toy_pennylane_qsvt.yaml
 ```
 
 Run a small parameter sweep with:
@@ -71,14 +91,18 @@ Available method names are:
 - integrators: `backward_euler`, `crank_nicolson`, `bdf2`,
   `folded_backward_euler`, `pade22`, `rk45`, `exponential`, `krylov_exponential`
 - solvers: `classical`, `hhl_simulator`, `qsvt_simulator`, `vqls_simulator`,
-  `pennylane_vqls`, `preconditioned_qsvt`, `iterative_refinement`
+  `pennylane_hhl`, `pennylane_qsvt`, `pennylane_vqls`,
+  `pennylane_complex_vqls`, `preconditioned_qsvt`, `iterative_refinement`
 
 The algebraic QLS methods are explicitly called *simulators*: they validate
 preprocessing, inverse transformations, scaling, and residuals but make no
 quantum-speedup or hardware claim. PennyLane and pyQSP remain optional research
-dependencies. `pennylane_vqls` is a working `default.qubit` circuit backend for
-tiny real systems. Full-vector readout remains a simulator-only verification
+dependencies. PennyLane HHL, QSVT, and real/complex VQLS are working
+`default.qubit` backends for tiny systems. Full-vector readout remains a simulator-only verification
 convenience, not a quantum complexity claim.
+
+The practice suite provides seven exact-reference systems spanning sparse,
+dense, non-normal, growing, oscillatory, complex, and 2--16-dimensional cases.
 
 ## Architecture and extension
 
@@ -116,6 +140,9 @@ pipeline suitable for CI.
 - [Error decomposition and complexity](docs/math/error_and_complexity.md)
 - [PennyLane circuits](docs/math/pennylane_quantum.md)
 - [Lindblad simulation](docs/math/lindblad.md)
+- [Practice systems](docs/math/practice_systems.md)
+- [Dashboard guide](docs/dashboard.md)
+- [Implementation status and roadmap](docs/roadmap.md)
 - [API reference](docs/api_reference.md)
 
 ## Known limitations
@@ -133,5 +160,5 @@ pipeline suitable for CI.
   simulators return full vectors strictly for numerical verification.
 - Staged errors are computable discrepancy proxies, not rigorous additive upper
   bounds; norms remove signs, so their scalar sum need not equal total error.
-- The PennyLane VQLS ansatz currently supports tiny real systems and noiseless
-  statevector optimization. Shot variance is estimated when `shots` is supplied.
+- PennyLane quantum modes are tiny-system statevector demonstrations. Shot
+  variance is estimated when `shots` is supplied; shot-trained losses remain partial.

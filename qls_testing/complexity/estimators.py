@@ -45,9 +45,30 @@ class DefaultComplexityEstimator(ComplexityEstimator):
             for item in integration.solve_diagnostics
             if "degree" in item.metadata
         ]
+        clock_qubits = [
+            int(item.metadata["n_clock"])
+            for item in integration.solve_diagnostics
+            if "n_clock" in item.metadata
+        ]
+        circuit_depths = [
+            int(item.metadata["circuit_depth"])
+            for item in integration.solve_diagnostics
+            if "circuit_depth" in item.metadata
+        ]
+        success_probabilities = [
+            float(item.metadata["success_probability"])
+            for item in integration.solve_diagnostics
+            if "success_probability" in item.metadata
+        ]
         condition = max(conditions, default=float(integration.metadata.get("lhs_condition", 1.0)))
         polynomial_degree = max(degrees, default=0)
         qubits = max(1, int(np.ceil(np.log2(max(dimension, 2)))))
+        if polynomial_degree:
+            query_proxy = max(solves, 1) * polynomial_degree
+        elif clock_qubits:
+            query_proxy = max(solves, 1) * (2 ** max(clock_qubits) - 1)
+        else:
+            query_proxy = max(solves, 1)
         metrics: dict[str, float | int | str] = {
             "lifted_dimension": dimension,
             "nnz": nnz,
@@ -58,10 +79,13 @@ class DefaultComplexityEstimator(ComplexityEstimator):
             "sparse_matvec_proxy": int(max(steps, 1) * nnz),
             "condition_number_proxy": condition,
             "qsvt_degree": polynomial_degree,
-            "quantum_query_proxy": int(max(solves, 1) * max(polynomial_degree, 1)),
+            "quantum_query_proxy": int(query_proxy),
             "controlled_operation_proxy": int(
-                max(solves, 1) * max(polynomial_degree, 1) * qubits
+                query_proxy * qubits
             ),
+            "phase_estimation_clock_qubits": max(clock_qubits, default=0),
+            "circuit_depth_proxy": max(circuit_depths, default=0),
+            "minimum_postselection_probability": min(success_probabilities, default=1.0),
             "integrator": integrator_name,
             "solver": solver_name,
         }

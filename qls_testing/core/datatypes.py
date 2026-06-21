@@ -21,8 +21,8 @@ class PolynomialSystem:
     """
 
     variable_names: tuple[str, ...]
-    terms: tuple[dict[Exponent, float], ...]
-    initial_state: NDArray[np.float64]
+    terms: tuple[dict[Exponent, complex | float], ...]
+    initial_state: NDArray[np.number]
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -36,7 +36,7 @@ class PolynomialSystem:
 
     def evaluate(self, state: NDArray[np.float64]) -> NDArray[np.float64]:
         """Evaluate the polynomial vector field."""
-        x = np.asarray(state, dtype=float)
+        x = np.asarray(state)
         return np.asarray(
             [sum(c * np.prod(x ** np.asarray(a)) for a, c in eq.items()) for eq in self.terms]
         )

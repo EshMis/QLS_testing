@@ -7,8 +7,11 @@ from .primitives import (
     sparse_block_encoding_data,
 )
 from .vqls import PennyLaneVQLSSolver
+from .hhl import PennyLaneHHLSolver
+from .qsvt import PennyLaneQSVTSolver
 
 __all__ = [
-    "PennyLaneVQLSSolver", "QuantumLinearSolver", "block_encoding_matrix",
+    "PennyLaneHHLSolver", "PennyLaneQSVTSolver", "PennyLaneVQLSSolver",
+    "QuantumLinearSolver", "block_encoding_matrix",
     "projected_block_encoding_action", "sparse_block_encoding_data",
 ]

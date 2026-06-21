@@ -108,11 +108,23 @@ class Config:
         return self
 
 
-def load_config(path: str | Path) -> Config:
+def load_config(path: str | Path, overrides: list[str] | None = None) -> Config:
     """Load and validate a YAML file, rejecting misspelled keys."""
     config_path = Path(path)
     with config_path.open(encoding="utf-8") as stream:
         raw = yaml.safe_load(stream) or {}
+    for override in overrides or []:
+        if "=" not in override:
+            raise ValueError(f"override must use dotted.path=value syntax: {override!r}")
+        dotted_path, raw_value = override.split("=", 1)
+        keys = dotted_path.split(".")
+        target = raw
+        for key in keys[:-1]:
+            child = target.setdefault(key, {})
+            if not isinstance(child, dict):
+                raise ValueError(f"override path {dotted_path!r} crosses a non-mapping value")
+            target = child
+        target[keys[-1]] = yaml.safe_load(raw_value)
     allowed = {
         "system", "linearization", "integrator", "qls", "time", "output",
         "error", "complexity", "random_seed",

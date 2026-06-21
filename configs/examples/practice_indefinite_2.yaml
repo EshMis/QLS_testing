@@ -1,0 +1,7 @@
+system: {name: practice_indefinite_2}
+linearization: {name: carleman, settings: {order: 1}}
+integrator: {name: crank_nicolson}
+qls: {name: classical}
+time: {t_final: 1.0, dt: 0.02, n_points: 51}
+output: {directory: outputs/practice_indefinite_2, save_plot: true}
+random_seed: 42

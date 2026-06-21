@@ -8,6 +8,7 @@ import numpy as np
 
 from qls_testing.core.datatypes import ExperimentResult
 from qls_testing.models.lindblad import LindbladResult
+from qls_testing.models.observables import ObservableGroup
 
 
 def trajectory_figure(result: ExperimentResult) -> go.Figure:
@@ -80,4 +81,103 @@ def lindblad_figure(result: LindbladResult) -> go.Figure:
     figure.add_trace(go.Scatter(x=result.times, y=np.maximum(-result.minimum_eigenvalue, 0.0) + 1e-18, name="negativity violation"), row=2, col=1)
     figure.update_yaxes(type="log", row=2, col=1)
     figure.update_layout(template="plotly_white", height=700, title="Lindblad amplitude damping (separate from QLS)")
+    return figure
+
+
+def observable_comparison_figure(
+    result: ExperimentResult, group: ObservableGroup
+) -> go.Figure:
+    """Compare pipeline/reference and absolute/relative errors for one observable group."""
+    figure = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.12,
+        subplot_titles=(f"{group.title}: pipeline vs reference", "Absolute and relative error"),
+    )
+    if not group.labels:
+        figure.add_annotation(
+            text=f"{group.title} is not present in this model.",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+        return figure
+    physical_labels = result.linearized_system.labels[: result.linearized_system.physical_dimension]
+    for label in group.labels:
+        index = physical_labels.index(label)
+        pipeline = np.asarray(result.physical_states[:, index]).real
+        reference = np.asarray(result.reference_states[:, index]).real
+        absolute = np.abs(pipeline - reference)
+        relative = absolute / np.maximum(np.abs(reference), 1e-12)
+        custom = np.column_stack(
+            (
+                reference,
+                absolute,
+                relative,
+                np.full(len(pipeline), label, dtype=object),
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=result.integration.times,
+                y=pipeline,
+                customdata=custom,
+                mode="lines+markers",
+                marker={"size": 4},
+                name=f"{label} pipeline",
+                hovertemplate=(
+                    "variable=%{customdata[3]}<br>t=%{x:.6g}<br>pipeline=%{y:.6g}"
+                    "<br>reference=%{customdata[0]:.6g}<br>abs error=%{customdata[1]:.3e}"
+                    "<br>rel error=%{customdata[2]:.3e}<extra></extra>"
+                ),
+            ),
+            row=1,
+            col=1,
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=result.reference_times,
+                y=reference,
+                mode="lines",
+                line={"dash": "dash"},
+                name=f"{label} reference",
+                hovertemplate=f"{label} reference<br>t=%{{x:.6g}}<br>value=%{{y:.6g}}<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=result.integration.times,
+                y=absolute + 1e-18,
+                customdata=custom,
+                name=f"{label} absolute",
+                hovertemplate=f"{label}<br>t=%{{x:.6g}}<br>absolute=%{{y:.3e}}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=result.integration.times,
+                y=relative + 1e-18,
+                customdata=custom,
+                line={"dash": "dot"},
+                name=f"{label} relative",
+                hovertemplate=f"{label}<br>t=%{{x:.6g}}<br>relative=%{{y:.3e}}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+    figure.update_yaxes(type="log", row=2, col=1)
+    figure.update_xaxes(title_text="Time", row=2, col=1)
+    figure.update_layout(
+        template="plotly_white",
+        height=680,
+        hovermode="closest",
+        legend={"orientation": "h", "y": -0.18},
+    )
     return figure

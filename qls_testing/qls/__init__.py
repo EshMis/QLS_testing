@@ -37,6 +37,32 @@ def _pennylane_vqls_factory(**settings: object) -> object:
 QLS_SOLVERS.register("pennylane_vqls", _pennylane_vqls_factory)
 
 
+def _pennylane_hhl_factory(**settings: object) -> object:
+    from qls_testing.quantum_pennylane import PennyLaneHHLSolver
+
+    return PennyLaneHHLSolver(**settings)
+
+
+def _pennylane_qsvt_factory(**settings: object) -> object:
+    from qls_testing.quantum_pennylane import PennyLaneQSVTSolver
+
+    return PennyLaneQSVTSolver(**settings)
+
+
+QLS_SOLVERS.register("pennylane_hhl", _pennylane_hhl_factory)
+QLS_SOLVERS.register("pennylane_qsvt", _pennylane_qsvt_factory)
+
+
+def _pennylane_complex_vqls_factory(**settings: object) -> object:
+    from qls_testing.quantum_pennylane import PennyLaneVQLSSolver
+
+    settings = {"complex_ansatz": True, **settings}
+    return PennyLaneVQLSSolver(**settings)
+
+
+QLS_SOLVERS.register("pennylane_complex_vqls", _pennylane_complex_vqls_factory)
+
+
 def _preconditioned_qsvt_factory(
     qsvt_settings: dict[str, object] | None = None,
     diagonal_tolerance: float = 1e-12,

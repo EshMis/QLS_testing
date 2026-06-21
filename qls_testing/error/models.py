@@ -53,9 +53,9 @@ class PipelineErrorModel(ErrorModel):
         exact_lifted_states = np.asarray(
             [expm_multiply(time * sparse_matrix, lifted.initial_state) for time in times]
         )
-        exact_lifted = np.asarray(lifted.project(exact_lifted_states), dtype=float)
-        actual = np.asarray(lifted.project(integration.states), dtype=float)
-        classical_discrete = np.asarray(lifted.project(classical_integration.states), dtype=float)
+        exact_lifted = np.asarray(lifted.project(exact_lifted_states))
+        actual = np.asarray(lifted.project(integration.states))
+        classical_discrete = np.asarray(lifted.project(classical_integration.states))
 
         def norm(values: np.ndarray) -> np.ndarray:
             return np.linalg.norm(values, axis=1)
@@ -73,8 +73,14 @@ class PipelineErrorModel(ErrorModel):
             if history:
                 refinement[index] = float(history[-1])
         sampling = np.zeros(len(times))
+        block_polynomial = np.zeros(len(times))
         for index, diagnostic in enumerate(integration.solve_diagnostics[: len(times) - 1], start=1):
             sampling[index] = float(diagnostic.metadata.get("sampling_std", 0.0))
+            block_polynomial[index] = float(
+                diagnostic.metadata.get(
+                    "polynomial_error", diagnostic.metadata.get("max_inverse_error", 0.0)
+                )
+            )
 
         components = {
             "integration_discretization": norm(classical_discrete - exact_lifted),
@@ -84,6 +90,7 @@ class PipelineErrorModel(ErrorModel):
             "qssa_model": norm(polynomial_reference - target_reference),
             "iterative_refinement_residual": refinement,
             "quantum_sampling_std": sampling,
+            "block_encoding_polynomial": block_polynomial,
             "total_observed": norm(actual - target_reference),
         }
         descriptions = {
@@ -94,6 +101,7 @@ class PipelineErrorModel(ErrorModel):
             "qssa_model": "Polynomial QSSA approximation versus rational QSSA reference.",
             "iterative_refinement_residual": "Residual remaining after refinement rounds.",
             "quantum_sampling_std": "Reported shot/sampling standard deviation when available.",
+            "block_encoding_polynomial": "QSVT reciprocal-polynomial approximation error on the encoded spectrum.",
             "total_observed": "Pipeline trajectory versus the physical target reference.",
         }
         return ErrorReport(times, components, descriptions)

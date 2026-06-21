@@ -18,8 +18,8 @@ e_{QLS}=\|x_q-x_d\|,
 \quad e_{total}=\|x_q-x_*\|.
 \]
 
-It also records each solve's relative residual \(\|Mx-b\|/\|b\|\), iterative
-refinement's final residual, and a shot standard-error proxy when a circuit
+It also records each solve's relative residual \(\|Mx-b\|/\|b\|\), QSVT's
+reciprocal-polynomial error, iterative refinement's final residual, and a shot standard-error proxy when a circuit
 backend reports one. These are per-time discrepancy estimates, not rigorous
 independent bounds. Since vector directions are discarded, component norms are
 not expected to add exactly to \(e_{total}\).
@@ -53,4 +53,8 @@ Under efficient state preparation, block-encoding, and favorable readout:
 These assumptions are strong. State preparation, postselection, tomography,
 noise mitigation, compilation, and backend connectivity can dominate. **This is
 an estimate; actual runtime depends on backend.**
+
+For NDME mode the dashboard additionally reports density/Liouville dimensions,
+the semidissipative shift, trace defect, and positivity violation. Oracle
+complexities from the supplied paper are documented in `lindblad.md`.
 

@@ -25,7 +25,7 @@ def enumerate_monomials(dimension: int, order: int) -> tuple[Exponent, ...]:
 
 def lift_state(state: np.ndarray, exponents: tuple[Exponent, ...]) -> np.ndarray:
     x = np.asarray(state)
-    return np.asarray([np.prod(x ** np.asarray(exponent)) for exponent in exponents], dtype=float)
+    return np.asarray([np.prod(x ** np.asarray(exponent)) for exponent in exponents])
 
 
 class CarlemanLinearization(LinearizationMethod):
@@ -50,7 +50,14 @@ class CarlemanLinearization(LinearizationMethod):
         expected = sum(comb(n + degree - 1, degree) for degree in range(1, self.order + 1))
         assert len(exponents) == expected + int(has_constant)
         index = {exponent: column for column, exponent in enumerate(exponents)}
-        matrix = np.zeros((len(exponents), len(exponents)))
+        complex_coefficients = any(
+            np.iscomplexobj(coefficient)
+            for equation in system.terms
+            for coefficient in equation.values()
+        )
+        matrix = np.zeros(
+            (len(exponents), len(exponents)), dtype=complex if complex_coefficients else float
+        )
         dropped = 0
 
         for row, alpha in enumerate(exponents):

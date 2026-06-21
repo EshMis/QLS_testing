@@ -31,9 +31,9 @@ classical eigendecomposition, standing in for phase estimation and controlled
 rotation. Singular values below a configurable cutoff raise an error rather
 than being silently pseudo-inverted.
 
-The PennyLane circuit in the source notebook additionally pads dimensions,
-uses signed phase bins, and postselects the inversion ancilla. Those details are
-preserved in the notebook but are not a stable package backend yet.
+The packaged `pennylane_hhl` backend now pads dimensions, uses signed phase
+bins, applies conditioned rotations, runs inverse QPE, postselects the inversion
+ancilla, and handles non-Hermitian dilation. It is limited to tiny matrices.
 
 ## QSVT polynomial simulator
 
@@ -48,8 +48,9 @@ x\approx Vp(\Sigma)U^\dagger b.
 Chebyshev coefficients are never converted to a high-degree power basis. The
 reported diagnostics separate maximum reciprocal approximation error from the
 actual linear-system residual. This class is a circuit-independent numerical
-surrogate; block encoding, QSVT phase synthesis, postselection, and sampling are
-future adapters.
+surrogate. The separate `pennylane_qsvt` backend performs native block encoding,
+phase synthesis, QSVT, and postselection for tiny matrices; scalable sparse
+oracles remain future work.
 
 ## Variational simulator
 
@@ -109,4 +110,3 @@ statevector extraction are suitable for validation, not scalable readout.
 The block-encoding demo uses PennyLane `BlockEncode` and verifies that projecting
 the ancilla-zero branch returns \(A|b\rangle/\alpha\). CSR oracle data forms a
 stable interface boundary for a future sparse circuit implementation.
-
