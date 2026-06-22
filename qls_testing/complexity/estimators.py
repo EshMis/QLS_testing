@@ -177,7 +177,7 @@ class DefaultComplexityEstimator(ComplexityEstimator):
                 )
             )
             asymptotic["integrator"] = "N_t dense matrix exponentials, approximately O(N_t*D^3)"
-        elif integrator_name == "lindblad_ndme":
+        elif integrator_name in {"lindblad_ndme", "pennylane_lindblad"}:
             density_dimension = int(integration.metadata.get("density_dimension", 2 * dimension))
             liouville_dimension = int(integration.metadata.get("liouville_dimension", density_dimension**2))
             terms.append(
@@ -187,20 +187,37 @@ class DefaultComplexityEstimator(ComplexityEstimator):
                     r"d_\rho=2D,\qquad d_{\mathcal L}=d_\rho^2",
                     f"D={dimension}, d_rho={density_dimension}, d_L={liouville_dimension}",
                     "NDME uses a two-block ancilla extension and vectorizes the density matrix.",
-                    "This branch evolves a classical density matrix and does not invoke a QLS solver.",
+                    "This branch evolves a density matrix and does not invoke a QLS solver.",
                 )
             )
-            terms.append(
-                ComplexityTerm(
-                    "Lindbladian / NDME",
-                    "Classical Liouvillian integration proxy",
-                    r"C_{\rm NDME,classical}\sim N_{\rm fev}\,O(d_{\mathcal L}^{2})",
-                    f"Liouville dimension={liouville_dimension}; dense slots={liouville_dimension**2}",
-                    "Vectorized master-equation RHS applies the Liouvillian to vec(rho).",
-                    "This is the repository's classical simulation cost, not the paper's oracle complexity.",
+            if integrator_name == "pennylane_lindblad":
+                applications = int(integration.metadata.get("channel_applications", 0))
+                qubits = int(integration.metadata.get("qubits", 0))
+                terms.append(
+                    ComplexityTerm(
+                        "Lindbladian / NDME",
+                        "PennyLane short-time channel execution",
+                        r"C_{\rm channel}=N_{\rm interval}N_{\rm substep}C_{\rm Kraus}(n_q)",
+                        f"channel applications={applications}, qubits={qubits}",
+                        "Each substep applies a normalized first-order Kraus channel on default.mixed.",
+                        "Mixed-state simulation stores O(4^n_q) amplitudes; hardware channel realization needs dilation or native noise.",
+                    )
                 )
+            else:
+                terms.append(
+                    ComplexityTerm(
+                        "Lindbladian / NDME",
+                        "Classical Liouvillian integration proxy",
+                        r"C_{\rm NDME,classical}\sim N_{\rm fev}\,O(d_{\mathcal L}^{2})",
+                        f"Liouville dimension={liouville_dimension}; dense slots={liouville_dimension**2}",
+                        "Vectorized master-equation RHS applies the Liouvillian to vec(rho).",
+                        "This is the repository's classical simulation cost, not the paper's oracle complexity.",
+                    )
+                )
+            asymptotic["lindblad_ndme"] = (
+                "short-time PennyLane Kraus channels" if integrator_name == "pennylane_lindblad"
+                else "dense classical propagation on Liouville dimension (2D)^2"
             )
-            asymptotic["lindblad_ndme"] = "dense classical propagation on Liouville dimension (2D)^2"
 
         diagnostics = integration.solve_diagnostics
         metadata = [item.metadata for item in diagnostics]

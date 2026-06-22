@@ -1,0 +1,15 @@
+system:
+  name: lindblad_enzyme_ndme_pennylane
+  initial_substrate: 3.0
+linearization:
+  name: carleman
+  settings: {order: 1}
+integrator:
+  name: pennylane_lindblad
+  settings: {substeps: 4, backend: default.mixed}
+qls: {name: classical}
+time: {t_final: 0.2, dt: 0.05, n_points: 5, rtol: 1.0e-9, atol: 1.0e-11}
+output: {directory: outputs/lindblad_enzyme_pennylane, save_plot: true}
+error: {enabled: true}
+complexity: {enabled: true}
+random_seed: 42

@@ -10,6 +10,10 @@
 - `LiftedSystemModel`: lifted coordinate names, degrees, lookup, and trace access.
 - `ErrorReport`: time-resolved staged discrepancies and descriptions.
 - `ComplexityReport`: numerical/quantum proxies, asymptotics, and caveat.
+- `GroundTruth` / `DensityGroundTruth`: method-independent ODE or exact
+  Liouvillian references from `qls_testing.reference.reference_solver`.
+- `NDMEEncoding`: shared operators and the single off-diagonal extraction map
+  used by classical, PennyLane, and ground-truth Lindbladian paths.
 - `LindbladModel` / `LindbladResult`: separate master-equation representation.
 - `NDMELindbladResult`: PDF-based off-diagonal encoding, extraction, and physicality diagnostics.
 - `PracticeSystem`: exact-reference matrix benchmark plus structural metadata.

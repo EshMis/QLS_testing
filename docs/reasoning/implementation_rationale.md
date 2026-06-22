@@ -10,12 +10,12 @@ derivations by preserving decisions, observed failures, and what they taught us.
    its rational rates require another approximation before Carleman lifting.
 
 2. **Use finite Carleman lifting as the common boundary.** It translates both
-   polynomial models into \(\dot y=A_Ny\), making integrators and solvers
+   polynomial models into $\dot y=A_Ny$, making integrators and solvers
    interchangeable. The notebook's symbolic chain rule was retained and tested
    on brute-force toy systems rather than treated as matrix magic.
 
 3. **Do not hide the QSSA radius failure.** The notebook default has
-   \(S(0)/K_{m,1}=1.5\), outside the zero-centred geometric-series radius. The
+   $S(0)/K_{m,1}=1.5$, outside the zero-centred geometric-series radius. The
    implementation records this fact and uses a moving-point expansion in
    `auto` mode. Restarting was added because a locally valid polynomial need not
    remain valid over the full trajectory.
@@ -28,7 +28,7 @@ derivations by preserving decisions, observed failures, and what they taught us.
 
 5. **Make residual and scale non-negotiable.** Quantum linear algorithms output
    normalized states naturally, but the ODE needs magnitudes. Every solver now
-   reconstructs scale and is judged by \(\|Mx-b\|\), not state overlap alone.
+   reconstructs scale and is judged by $\|Mx-b\|$, not state overlap alone.
 
 6. **Separate algebraic simulators from circuit-backed experiments.** The HHL
    and QSVT simulators validate dilation, cutoffs, inverse transforms, and
@@ -76,6 +76,23 @@ derivations by preserving decisions, observed failures, and what they taught us.
     Liouville-dimension diagnostics. The order-1 limit is deliberate: order 2
     would produce a 108-dimensional density matrix in the interactive path.
 
+13. **Make ground truth method-independent.** Reference curves previously came
+    from inline branches and NDME carried its own $e^{At}$ comparison. A single
+    `qls_testing.reference` API now generates physical ODE truth or exact
+    Liouvillian truth without accepting an integrator or solver argument.
+    Regression tests require identical arrays when those methods change.
+
+14. **Add a real PennyLane Lindbladian execution path.** The practice and
+    order-1 enzyme modes evolve density matrices through normalized short-time
+    Kraus channels on `default.mixed`. Exact Liouvillian exponentiation remains
+    outside that pipeline as ground truth. This exposes channel-step error while
+    preserving trace and positivity, without pretending `QubitChannel` is
+    already a hardware-native implementation.
+
+15. **Use one Markdown math convention.** GitHub documentation and Streamlit
+    now use `$...$` and `$$...$$`. A repository script checks that legacy
+    delimiters do not quietly return.
+
 ## What succeeded, what remains limited
 
 The modular pipeline reproduces simple analytic systems, verifies Carleman rows,
@@ -101,7 +118,6 @@ the present practical limits—not details to be hidden behind asymptotic notati
 - For VQLS, test local/overlap costs, layerwise training, parameter transfer in
   time, natural gradients, and finite-shot gradient estimators. Keep the
   classical residual as the acceptance criterion during simulator research.
-- Design observable-level output experiments for \(S\), product yield, or
+- Design observable-level output experiments for $S$, product yield, or
   conserved quantities; avoid tomography when the scientific question does not
   require all amplitudes.
-

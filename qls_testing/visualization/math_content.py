@@ -7,13 +7,13 @@ from qls_testing.core.config import Config
 
 def active_math_sections(config: Config) -> tuple[tuple[str, str, str], ...]:
     sections: list[tuple[str, str, str]] = []
-    if config.system.name == "lindblad_enzyme_ndme":
+    if config.system.name.startswith("lindblad_"):
         sections.extend(
             (
                 (
                     "Linear ODE convention",
                     r"\dot{\mu}=A\mu=-V\mu,\qquad V=-A",
-                    "The reduced enzyme Carleman operator is embedded without using a QLS.",
+                    "The selected Carleman operator is embedded without using a QLS.",
                 ),
                 (
                     "NDME Lindbladian",
@@ -32,6 +32,14 @@ def active_math_sections(config: Config) -> tuple[tuple[str, str, str], ...]:
                 ),
             )
         )
+        if config.system.name.endswith("_pennylane"):
+            sections.append(
+                (
+                    "PennyLane short-time channel",
+                    r"K_0=I-\delta t(iH+\tfrac12\sum_jL_j^\dagger L_j),\qquad K_j=\sqrt{\delta t}L_j",
+                    "The Kraus set is normalized to an exact CPTP map at each finite substep.",
+                )
+            )
     else:
         sections.append(
             (
@@ -86,11 +94,14 @@ def active_math_sections(config: Config) -> tuple[tuple[str, str, str], ...]:
                 r"C_{\mathrm{dense}}=O(N_{\mathrm{steps}}D^3),\qquad C_{\mathrm{Krylov}}\approx O(m\,\mathrm{nnz}(A))",
                 "Factorization reuse can reduce repeated dense solves to O(D³+Nsteps D²).",
             ),
+        )
+    )
+    if not config.system.name.startswith("lindblad_"):
+        sections.append(
             (
                 "Idealized quantum dependence",
                 r"C_{\mathrm{HHL}}=\widetilde O\!\left(\frac{s\kappa\,\mathrm{polylog}(D)}{\epsilon}\right),\qquad C_{\mathrm{QSVT}}=O\!\left(\kappa\log\frac1\epsilon\right)\ \mathrm{queries}",
                 "State preparation, postselection, readout, noise, and compilation are not free.",
-            ),
+            )
         )
-    )
     return tuple(sections)

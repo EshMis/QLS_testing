@@ -52,10 +52,37 @@ class NDMELindbladResult:
     times: np.ndarray
     density_matrices: np.ndarray
     encoded_states: np.ndarray
-    reference_states: np.ndarray
     trace_error: np.ndarray
     minimum_eigenvalue: np.ndarray
     metadata: dict[str, object]
+
+
+@dataclass(frozen=True)
+class NDMEEncoding:
+    """Operators and extraction data for the paper's nondiagonal encoding."""
+
+    operator: np.ndarray
+    hamiltonian: np.ndarray
+    jump: np.ndarray
+    initial_density: np.ndarray
+    normalized_initial: np.ndarray
+    initial_norm: float
+    shift: float
+    metadata: dict[str, object]
+
+    def model(self) -> LindbladModel:
+        dimension = self.operator.shape[0]
+        labels = tuple(f"ndme_{index}" for index in range(2 * dimension))
+        return LindbladModel(self.hamiltonian, (self.jump,), self.initial_density, labels)
+
+    def extract_states(self, densities: np.ndarray, times: np.ndarray) -> np.ndarray:
+        dimension = self.operator.shape[0]
+        states = []
+        for time, density in zip(times, densities):
+            upper_right = density[:dimension, dimension : 2 * dimension]
+            shifted_state = 2.0 * upper_right @ self.normalized_initial
+            states.append(self.initial_norm * np.exp(self.shift * time) * shifted_state)
+        return np.real_if_close(np.asarray(states))
 
 
 def amplitude_damping_model(decay_rate: float = 1.0) -> LindbladModel:
@@ -92,22 +119,115 @@ def simulate_lindblad(model: LindbladModel, t_final: float, n_points: int) -> Li
     )
 
 
-def simulate_ndme_linear_ode(
-    matrix: np.ndarray,
-    initial_state: np.ndarray,
+def _first_order_cptp_kraus(model: LindbladModel, step: float) -> tuple[np.ndarray, ...]:
+    """Build a normalized first-order Kraus approximation to one GKSL step."""
+    hamiltonian = np.asarray(model.hamiltonian, dtype=complex)
+    identity = np.eye(hamiltonian.shape[0], dtype=complex)
+    gram = sum(
+        (np.asarray(jump, dtype=complex).conj().T @ np.asarray(jump, dtype=complex)
+         for jump in model.jump_operators),
+        np.zeros_like(hamiltonian),
+    )
+    operators = [identity - step * (1j * hamiltonian + 0.5 * gram)]
+    operators.extend(np.sqrt(step) * np.asarray(jump, dtype=complex) for jump in model.jump_operators)
+    completeness = sum((operator.conj().T @ operator for operator in operators), np.zeros_like(identity))
+    eigenvalues, eigenvectors = np.linalg.eigh(0.5 * (completeness + completeness.conj().T))
+    if np.min(eigenvalues) <= 0.0:
+        raise ValueError("time step is too large for the normalized first-order channel")
+    inverse_root = eigenvectors @ np.diag(eigenvalues**-0.5) @ eigenvectors.conj().T
+    return tuple(operator @ inverse_root for operator in operators)
+
+
+def _pad_lindblad_model(model: LindbladModel) -> tuple[LindbladModel, int]:
+    original_dimension = model.hamiltonian.shape[0]
+    qubits = max(1, int(np.ceil(np.log2(original_dimension))))
+    padded_dimension = 2**qubits
+    if padded_dimension == original_dimension:
+        return model, original_dimension
+    hamiltonian = np.zeros((padded_dimension, padded_dimension), dtype=complex)
+    hamiltonian[:original_dimension, :original_dimension] = model.hamiltonian
+    jumps = []
+    for jump in model.jump_operators:
+        padded = np.zeros_like(hamiltonian)
+        padded[:original_dimension, :original_dimension] = jump
+        jumps.append(padded)
+    density = np.zeros_like(hamiltonian)
+    density[:original_dimension, :original_dimension] = model.initial_density
+    return LindbladModel(hamiltonian, tuple(jumps), density, model.labels), original_dimension
+
+
+def simulate_lindblad_pennylane(
+    model: LindbladModel,
     times: np.ndarray,
     *,
-    shift_epsilon: float = 1e-9,
-    rtol: float = 1e-9,
-    atol: float = 1e-11,
-) -> NDMELindbladResult:
-    """Simulate the PDF's nondiagonal density-matrix encoding of ``mu'=A mu``.
+    substeps: int = 4,
+    backend: str = "default.mixed",
+) -> LindbladResult:
+    """Apply short-time CPTP channels through PennyLane's mixed-state device.
 
-    The paper writes ``mu'=-V mu``. Its construction requires
-    ``B=(V+V†)/2 >= 0`` and ``H1=(V-V†)/(2i)``. If needed, ``V`` is shifted by
-    ``kappa I`` to make ``B`` positive semidefinite; extraction multiplies by
-    ``exp(kappa t)`` to recover the original ODE solution.
+    The channel is a normalized first-order Kraus approximation. This is a
+    genuine PennyLane channel execution path, while exact Liouvillian evolution
+    remains the independent ground truth.
     """
+    if substeps < 1:
+        raise ValueError("substeps must be positive")
+    import pennylane as qml
+
+    padded_model, original_dimension = _pad_lindblad_model(model)
+    padded_dimension = padded_model.hamiltonian.shape[0]
+    qubits = int(np.log2(padded_dimension))
+    wires = tuple(range(qubits))
+    device = qml.device(backend, wires=qubits)
+    grid = np.asarray(times, dtype=float)
+    current = np.asarray(padded_model.initial_density, dtype=complex)
+    densities = [current[:original_dimension, :original_dimension].copy()]
+    channel_applications = 0
+
+    for interval in np.diff(grid):
+        step = float(interval) / substeps
+        kraus = _first_order_cptp_kraus(padded_model, step)
+
+        @qml.qnode(device)
+        def channel_step(density: np.ndarray) -> np.ndarray:
+            qml.QubitDensityMatrix(density, wires=wires)
+            qml.QubitChannel(kraus, wires=wires)
+            return qml.density_matrix(wires=wires)
+
+        for _ in range(substeps):
+            current = np.asarray(channel_step(current))
+            channel_applications += 1
+        densities.append(current[:original_dimension, :original_dimension].copy())
+
+    density_array = np.asarray(densities)
+    populations = np.real(np.diagonal(density_array, axis1=1, axis2=2))
+    trace_error = np.abs(np.trace(density_array, axis1=1, axis2=2) - 1.0)
+    minimum_eigenvalue = np.asarray(
+        [np.min(np.linalg.eigvalsh(0.5 * (rho + rho.conj().T))) for rho in density_array]
+    )
+    return LindbladResult(
+        grid,
+        density_array,
+        populations,
+        trace_error,
+        minimum_eigenvalue,
+        {
+            "pathway": "pennylane_lindblad_channel",
+            "backend": backend,
+            "qubits": qubits,
+            "substeps_per_interval": substeps,
+            "channel_applications": channel_applications,
+            "channel_approximation": "normalized first-order Kraus",
+        },
+    )
+
+
+def build_ndme_encoding(
+    matrix: np.ndarray,
+    initial_state: np.ndarray,
+    *,
+    shift_epsilon: float = 1e-9,
+) -> NDMEEncoding:
+    """Construct the PDF's NDME operators without choosing an evolution method."""
     operator = np.asarray(matrix, dtype=complex)
     initial = np.asarray(initial_state, dtype=complex)
     dimension = operator.shape[0]
@@ -125,19 +245,54 @@ def simulate_ndme_linear_ode(
     shifted_part = hermitian_part + shift * np.eye(dimension)
     shifted_eigenvalues, eigenvectors = np.linalg.eigh(shifted_part)
     shifted_eigenvalues = np.clip(shifted_eigenvalues, 0.0, None)
-    jump_left = (
-        eigenvectors
-        @ np.diag(np.sqrt(2.0 * shifted_eigenvalues))
-        @ eigenvectors.conj().T
-    )
-
+    jump_left = eigenvectors @ np.diag(np.sqrt(2.0 * shifted_eigenvalues)) @ eigenvectors.conj().T
     zero = np.zeros_like(operator)
     hamiltonian = block_diag(antihermitian_hamiltonian, zero)
     jump = block_diag(jump_left, zero)
     normalized_initial = initial / initial_norm
     projector = np.outer(normalized_initial, normalized_initial.conj())
     density_initial = 0.5 * np.block([[projector, projector], [projector, projector]])
-    full_dimension = 2 * dimension
+    generator_error = np.linalg.norm(
+        (-1j * antihermitian_hamiltonian - 0.5 * jump_left.conj().T @ jump_left)
+        - (operator - shift * np.eye(dimension))
+    )
+    metadata = {
+        "pathway": "lindblad_ndme",
+        "source": "Shang et al., PRL 135, 120604 (2025), Eqs. (2)-(5)",
+        "ode_dimension": dimension,
+        "density_dimension": 2 * dimension,
+        "liouville_dimension": (2 * dimension) ** 2,
+        "semidissipative_min_eigenvalue_before_shift": float(eigenvalues[0]),
+        "semidissipative_shift": shift,
+        "jump_rank": int(np.count_nonzero(shifted_eigenvalues > shift_epsilon)),
+        "generator_identity_error": float(generator_error),
+    }
+    return NDMEEncoding(
+        operator, hamiltonian, jump, density_initial, normalized_initial,
+        initial_norm, shift, metadata,
+    )
+
+
+def simulate_ndme_linear_ode(
+    matrix: np.ndarray,
+    initial_state: np.ndarray,
+    times: np.ndarray,
+    *,
+    shift_epsilon: float = 1e-9,
+    rtol: float = 1e-9,
+    atol: float = 1e-11,
+) -> NDMELindbladResult:
+    """Simulate the PDF's nondiagonal density-matrix encoding of ``mu'=A mu``.
+
+    The paper writes ``mu'=-V mu``. Its construction requires
+    ``B=(V+V†)/2 >= 0`` and ``H1=(V-V†)/(2i)``. If needed, ``V`` is shifted by
+    ``kappa I`` to make ``B`` positive semidefinite; extraction multiplies by
+    ``exp(kappa t)`` to recover the original ODE solution.
+    """
+    encoding = build_ndme_encoding(matrix, initial_state, shift_epsilon=shift_epsilon)
+    full_dimension = encoding.initial_density.shape[0]
+    hamiltonian = encoding.hamiltonian
+    jump = encoding.jump
 
     def rhs(_time: float, vector: np.ndarray) -> np.ndarray:
         density = vector.reshape((full_dimension, full_dimension))
@@ -150,7 +305,7 @@ def simulate_ndme_linear_ode(
     solution = solve_ivp(
         rhs,
         (float(times[0]), float(times[-1])),
-        density_initial.reshape(-1),
+        encoding.initial_density.reshape(-1),
         t_eval=np.asarray(times),
         method="DOP853",
         rtol=rtol,
@@ -159,38 +314,42 @@ def simulate_ndme_linear_ode(
     if not solution.success:
         raise RuntimeError(solution.message)
     densities = solution.y.T.reshape((-1, full_dimension, full_dimension))
-    encoded_states = []
-    for time, density in zip(times, densities):
-        upper_right = density[:dimension, dimension:]
-        shifted_state = 2.0 * upper_right @ normalized_initial
-        encoded_states.append(initial_norm * np.exp(shift * time) * shifted_state)
-    encoded = np.real_if_close(np.asarray(encoded_states))
-    reference = np.asarray([expm_multiply(time * csr_matrix(operator), initial) for time in times])
+    encoded = encoding.extract_states(densities, times)
     trace_error = np.abs(np.trace(densities, axis1=1, axis2=2) - 1.0)
     minimum_eigenvalue = np.asarray(
         [np.min(np.linalg.eigvalsh(0.5 * (rho + rho.conj().T))) for rho in densities]
-    )
-    generator_error = np.linalg.norm(
-        (-1j * antihermitian_hamiltonian - 0.5 * jump_left.conj().T @ jump_left)
-        - (operator - shift * np.eye(dimension))
     )
     return NDMELindbladResult(
         np.asarray(times),
         densities,
         encoded,
-        np.real_if_close(reference),
         trace_error,
         minimum_eigenvalue,
         {
-            "pathway": "lindblad_ndme",
-            "source": "Shang et al., PRL 135, 120604 (2025), Eqs. (2)-(5)",
-            "ode_dimension": dimension,
-            "density_dimension": full_dimension,
-            "liouville_dimension": full_dimension**2,
-            "semidissipative_min_eigenvalue_before_shift": float(eigenvalues[0]),
-            "semidissipative_shift": shift,
-            "jump_rank": int(np.count_nonzero(shifted_eigenvalues > shift_epsilon)),
-            "generator_identity_error": float(generator_error),
-            "reduced_model": "Carleman order 1 enzyme pathway",
+            **encoding.metadata,
+            "evolution_backend": "classical DOP853 density integration",
         },
+    )
+
+
+def simulate_ndme_pennylane(
+    matrix: np.ndarray,
+    initial_state: np.ndarray,
+    times: np.ndarray,
+    *,
+    substeps: int = 4,
+    backend: str = "default.mixed",
+) -> NDMELindbladResult:
+    """Run NDME short-time channels on PennyLane and extract ODE coordinates."""
+    encoding = build_ndme_encoding(matrix, initial_state)
+    result = simulate_lindblad_pennylane(
+        encoding.model(), np.asarray(times), substeps=substeps, backend=backend
+    )
+    return NDMELindbladResult(
+        result.times,
+        result.density_matrices,
+        encoding.extract_states(result.density_matrices, result.times),
+        result.trace_error,
+        result.minimum_eigenvalue,
+        {**encoding.metadata, **result.metadata},
     )

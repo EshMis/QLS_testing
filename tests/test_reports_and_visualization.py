@@ -8,6 +8,7 @@ from qls_testing.visualization.exports import result_csv, result_html, result_np
 from qls_testing.visualization.plotters import error_figure, variable_figure
 from qls_testing.models.observables import enzyme_observable_groups, observable_groups
 from qls_testing.visualization.math_content import active_math_sections
+from qls_testing.visualization.reasoning_content import active_reasoning
 from qls_testing.visualization.plotters import observable_comparison_figure
 
 
@@ -88,3 +89,23 @@ def test_math_sections_are_active_pipeline_specific():
     text = " ".join(latex for _, latex, _ in active_math_sections(ndme))
     assert "rho_{01}" in text
     assert "eta_T" in text
+
+
+def test_method_reasoning_is_selected_pipeline_specific():
+    ode = Config(
+        system=SystemConfig(name="toy_linear_ode"),
+        integrator=MethodConfig("crank_nicolson"),
+        qls=MethodConfig("pennylane_vqls"),
+    )
+    ode_text = " ".join(text for _, text in active_reasoning(ode))
+    assert "not L-stable" in ode_text
+    assert "nonzero updates" in ode_text
+
+    lindblad = Config(
+        system=SystemConfig(name="lindblad_practice_pennylane"),
+        integrator=MethodConfig("pennylane_lindblad"),
+        qls=MethodConfig("classical"),
+    )
+    lindblad_text = " ".join(text for _, text in active_reasoning(lindblad))
+    assert "Kraus channels" in lindblad_text
+    assert "exact Liouvillian ground truth" in lindblad_text

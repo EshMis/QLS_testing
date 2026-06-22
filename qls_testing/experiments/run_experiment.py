@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-from scipy.integrate import solve_ivp
 
 from qls_testing.core.config import Config, load_config
 from qls_testing.core.datatypes import ExperimentResult, IntegrationResult
@@ -18,15 +17,23 @@ from qls_testing.experiments.registry import INTEGRATORS, LINEARIZATIONS, QLS_SO
 from qls_testing.models import (
     LindbladResult,
     amplitude_damping_model,
+    build_ndme_encoding,
     build_toy_linear_ode,
+    lindblad_practice_system,
     simulate_lindblad,
     simulate_ndme_linear_ode,
+    simulate_ndme_pennylane,
     get_practice_system,
+)
+from qls_testing.reference import (
+    solve_ndme_ground_truth,
+    solve_ode_ground_truth,
+    solve_polynomial_ground_truth,
 )
 from qls_testing.qls.classical import ClassicalSolver
 from qls_testing.linearization.carleman import CarlemanLinearization, lift_state
 from qls_testing.linearization.restarted import AdaptiveRestartedCarleman
-from qls_testing.systems.metabolic import build_mass_action_pathway, build_qssa_pathway, qssa_rhs
+from qls_testing.systems.metabolic import build_mass_action_pathway, build_qssa_pathway
 
 # Import modules for their explicit registration side effects.
 import qls_testing.integrators  # noqa: F401,E402
@@ -101,38 +108,12 @@ def run_experiment(config: Config) -> ExperimentResult:
             output_stride=config.time.output_stride,
         )
     physical = np.asarray(lifted.project(integration.states))
-    offset = np.asarray(polynomial.metadata.get("projection_offset", 0.0))
-    if practice_model is not None:
-        polynomial_reference = practice_model.reference(integration.times)
-    else:
-        polynomial_solution = solve_ivp(
-            lambda _time, state: polynomial.evaluate(state),
-            (0.0, config.time.t_final),
-            polynomial.initial_state,
-            t_eval=integration.times,
-            method="LSODA",
-            rtol=1e-10,
-            atol=1e-12,
-        )
-        if not polynomial_solution.success:
-            raise RuntimeError(polynomial_solution.message)
-        polynomial_reference = polynomial_solution.y.T + offset
-    if config.system.name == "qssa_taylor_pathway":
-        physical_initial = np.asarray([config.system.initial_substrate, 0.0, 0.0, 0.0, 0.0])
-        target_solution = solve_ivp(
-            lambda _time, state: qssa_rhs(config.system, state),
-            (0.0, config.time.t_final),
-            physical_initial,
-            t_eval=integration.times,
-            method="LSODA",
-            rtol=1e-10,
-            atol=1e-12,
-        )
-        if not target_solution.success:
-            raise RuntimeError(target_solution.message)
-        target_reference = target_solution.y.T
-    else:
-        target_reference = polynomial_reference
+    polynomial_truth = solve_polynomial_ground_truth(polynomial, integration.times)
+    target_truth = solve_ode_ground_truth(
+        config.system, integration.times, polynomial=polynomial
+    )
+    polynomial_reference = polynomial_truth.states
+    target_reference = target_truth.states
     difference = physical - target_reference
     solve_residuals = [item.relative_residual for item in integration.solve_diagnostics]
     metrics = {
@@ -142,6 +123,8 @@ def run_experiment(config: Config) -> ExperimentResult:
         "max_relative_linear_solve_residual": float(max(solve_residuals, default=0.0)),
         "lifted_dimension": lifted.matrix.shape[0],
         "matrix_sparsity": lifted.metadata["sparsity"],
+        "reference_scope": target_truth.label,
+        "reference_metadata": target_truth.metadata,
     }
     error_report = None
     if config.error.enabled:
@@ -192,37 +175,60 @@ def run_lindblad_experiment(config: Config) -> LindbladResult | ExperimentResult
     if config.system.name == "lindblad_amplitude_damping":
         model = amplitude_damping_model(config.system.lindblad_decay_rate)
         return simulate_lindblad(model, config.time.t_final, config.time.n_points)
-    if config.system.name == "lindblad_enzyme_ndme":
+    if config.system.name in {
+        "lindblad_enzyme_ndme",
+        "lindblad_enzyme_ndme_pennylane",
+        "lindblad_practice_pennylane",
+    }:
         return run_ndme_enzyme_experiment(config)
-    raise ValueError("unknown Lindblad system; choose lindblad_enzyme_ndme")
+    raise ValueError("unknown Lindblad system")
 
 
 def run_ndme_enzyme_experiment(config: Config) -> ExperimentResult:
-    """Run the PDF-based NDME construction on the reduced enzyme Carleman model."""
+    """Run classical or PennyLane NDME against one exact Lindbladian truth."""
     requested_order = int(config.linearization.settings.get("order", 1))
     if requested_order != 1:
         raise ValueError(
             "lindblad_enzyme_ndme intentionally uses Carleman order 1; order 2 would create "
             "a 108-dimensional density matrix and is disabled for interactive use"
         )
-    polynomial = build_mass_action_pathway(config.system)
+    is_practice = config.system.name == "lindblad_practice_pennylane"
+    use_pennylane = config.system.name.endswith("_pennylane")
+    polynomial = (
+        lindblad_practice_system().polynomial_system()
+        if is_practice
+        else build_mass_action_pathway(config.system)
+    )
     lifted = CarlemanLinearization(order=1).linearize(polynomial)
     times = np.linspace(0.0, config.time.t_final, config.time.n_points)
-    ndme = simulate_ndme_linear_ode(
-        lifted.matrix,
-        lifted.initial_state,
-        times,
-        rtol=config.time.rtol,
-        atol=config.time.atol,
-    )
+    encoding = build_ndme_encoding(lifted.matrix, lifted.initial_state)
+    truth = solve_ndme_ground_truth(encoding, times)
+    if use_pennylane:
+        ndme = simulate_ndme_pennylane(
+            lifted.matrix,
+            lifted.initial_state,
+            times,
+            substeps=int(config.integrator.settings.get("substeps", 4)),
+            backend=str(config.integrator.settings.get("backend", "default.mixed")),
+        )
+        integration_method = "pennylane_lindblad"
+    else:
+        ndme = simulate_ndme_linear_ode(
+            lifted.matrix,
+            lifted.initial_state,
+            times,
+            rtol=config.time.rtol,
+            atol=config.time.atol,
+        )
+        integration_method = "lindblad_ndme"
     integration = IntegrationResult(
         times,
         ndme.encoded_states,
         (),
-        {"method": "lindblad_ndme", **ndme.metadata},
+        {"method": integration_method, **ndme.metadata},
     )
     physical = np.asarray(lifted.project(ndme.encoded_states), dtype=float)
-    reference = np.asarray(lifted.project(ndme.reference_states), dtype=float)
+    reference = np.asarray(lifted.project(truth.states), dtype=float)
     difference = physical - reference
     physical_error = np.linalg.norm(difference, axis=1)
     positivity_violation = np.maximum(-ndme.minimum_eigenvalue, 0.0)
@@ -235,16 +241,16 @@ def run_ndme_enzyme_experiment(config: Config) -> ExperimentResult:
             "total_observed": physical_error,
         },
         {
-            "lindblad_ndme_integration": "Extracted NDME state versus exp(A t) for the same reduced enzyme model.",
+            "lindblad_ndme_integration": "Extracted NDME state versus exact Liouvillian ground truth.",
             "trace_preservation": "Absolute density-matrix trace defect.",
             "positivity_violation": "Magnitude of any negative density-matrix eigenvalue.",
-            "total_observed": "Pipeline versus reduced-model reference in physical variables.",
+            "total_observed": "Pipeline versus Lindbladian ground truth in physical variables.",
         },
     )
     complexity_report = DefaultComplexityEstimator().estimate(
         lifted=lifted,
         integration=integration,
-        integrator_name="lindblad_ndme",
+        integrator_name=integration_method,
         solver_name="not_applicable",
     )
     complexity_report.metrics.update(
@@ -264,7 +270,8 @@ def run_ndme_enzyme_experiment(config: Config) -> ExperimentResult:
         "ndme": ndme.metadata,
         "error_components_final": error_report.final,
         "complexity": complexity_report.to_dict(),
-        "reference_scope": "exact exponential of the reduced Carleman-order-1 enzyme model",
+        "reference_scope": truth.label,
+        "reference_metadata": truth.metadata,
     }
     return ExperimentResult(
         config,

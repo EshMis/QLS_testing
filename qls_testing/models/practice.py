@@ -124,3 +124,22 @@ def get_practice_system(name: str) -> PracticeSystem:
         return PRACTICE_SYSTEMS[name]
     except KeyError as exc:
         raise ValueError(f"unknown practice system {name!r}") from exc
+
+
+def lindblad_practice_system() -> PracticeSystem:
+    """Four-coordinate enzyme-like chain small enough for mixed-state circuits."""
+    return PracticeSystem(
+        "lindblad_practice_pennylane",
+        np.asarray(
+            [
+                [-1.0, 0.0, 0.0, 0.0],
+                [0.7, -0.8, 0.0, 0.0],
+                [0.0, 0.5, 0.0, 0.0],
+                [0.3, 0.3, 0.0, -1.2],
+            ]
+        ),
+        np.asarray([1.0, 0.0, 0.0, 0.0]),
+        ("S", "X1", "P", "C1"),
+        "fast",
+        ("enzyme-like", "non-Hermitian", "stable", "P accumulating"),
+    )

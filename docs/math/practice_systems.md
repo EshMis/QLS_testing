@@ -1,7 +1,7 @@
 # Practice ODE suite
 
-Every practice system is a homogeneous linear ODE \(u'=Au\) with exact
-reference \(u(t)=e^{tA}u_0\). The suite deliberately probes assumptions that a
+Every practice system is a homogeneous linear ODE $u'=Au$ with exact
+reference $u(t)=e^{tA}u_0$. The suite deliberately probes assumptions that a
 single friendly SPD matrix would hide.
 
 | Name | Dimension | Structure | Mode |

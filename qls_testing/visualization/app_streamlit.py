@@ -10,6 +10,7 @@ from qls_testing.experiments.run_experiment import run_experiment, run_lindblad_
 from qls_testing.models import PRACTICE_SYSTEMS, observable_groups
 from qls_testing.visualization.exports import result_csv, result_html, result_npz
 from qls_testing.visualization.math_content import active_math_sections
+from qls_testing.visualization.reasoning_content import active_reasoning
 from qls_testing.visualization.plotters import (
     error_figure,
     observable_comparison_figure,
@@ -24,19 +25,27 @@ st.caption("Physical-variable comparisons first; lifted coordinates live under A
 systems = (
     "mass_action_pathway",
     "qssa_taylor_pathway",
+    "lindblad_practice_pennylane",
     "lindblad_enzyme_ndme",
+    "lindblad_enzyme_ndme_pennylane",
     "toy_linear_ode",
     *PRACTICE_SYSTEMS.keys(),
 )
 system_name = st.sidebar.selectbox("Pipeline / practice system", systems)
-is_ndme = system_name == "lindblad_enzyme_ndme"
+is_ndme = system_name.startswith("lindblad_")
+is_pennylane_ndme = system_name.endswith("_pennylane")
 order = st.sidebar.slider("Carleman order", 1, 4, 1 if is_ndme else 2, disabled=is_ndme)
-integrator = st.sidebar.selectbox(
-    "Integrator",
-    (
+integrator_options = (
+    (("pennylane_lindblad",) if is_pennylane_ndme else ("lindblad_ndme",))
+    if is_ndme
+    else (
         "bdf2", "backward_euler", "crank_nicolson", "krylov_exponential",
         "rk45", "folded_backward_euler", "pade22",
-    ),
+    )
+)
+integrator = st.sidebar.selectbox(
+    "Integrator",
+    integrator_options,
     disabled=is_ndme,
 )
 solver = st.sidebar.selectbox(
@@ -74,14 +83,21 @@ config = Config(
         qssa_expansion=qssa_expansion,
     ),
     linearization=MethodConfig("carleman", {"order": effective_order}),
-    integrator=MethodConfig("lindblad_ndme" if is_ndme else integrator),
+    integrator=MethodConfig(
+        integrator,
+        {"substeps": 8 if system_name == "lindblad_practice_pennylane" else 4}
+        if is_pennylane_ndme else {},
+    ),
     qls=MethodConfig("classical" if is_ndme else solver, {} if is_ndme else solver_settings),
     time=TimeConfig(t_final=t_final, dt=dt, n_points=max(3, int(round(t_final / dt)) + 1)),
     output=OutputConfig(save_plot=False),
 )
 
 if is_ndme:
-    st.sidebar.info("NDME is a Lindbladian ODE simulation, not a QLS. Order 1 keeps the density matrix interactive.")
+    pathway = "PennyLane short-time channels" if is_pennylane_ndme else "classical density evolution"
+    st.sidebar.info(
+        f"NDME uses {pathway}, not a QLS. Order 1 keeps the density matrix interactive."
+    )
 fixed_step_methods = {"bdf2", "backward_euler", "crank_nicolson", "folded_backward_euler"}
 grid_valid = is_ndme or integrator not in fixed_step_methods or np.isclose(
     t_final / dt, round(t_final / dt)
@@ -98,15 +114,15 @@ if st.button("Run selected pipeline", type="primary", disabled=not grid_valid):
 result = st.session_state.get("result")
 result_config = st.session_state.get("result_config")
 if result is not None and result_config is not None:
-    results_tab, error_tab, math_tab, advanced_tab = st.tabs(
-        ("Results", "Error & Complexity", "Math", "Advanced / Debug")
+    results_tab, error_tab, math_tab, reasoning_tab, advanced_tab = st.tabs(
+        ("Results", "Error & Complexity", "Math", "Method reasoning", "Advanced / Debug")
     )
     physical_labels = result.linearized_system.labels[: result.linearized_system.physical_dimension]
     groups = observable_groups(physical_labels)
 
     with results_tab:
-        st.subheader("Pipeline versus reference")
-        st.caption(result.metrics.get("reference_scope", "Reference: high-accuracy physical model."))
+        st.subheader("Pipeline versus ground truth")
+        st.caption(result.metrics.get("reference_scope", "Ground-truth ODE solution"))
         error_mode = st.segmented_control(
             "Error traces",
             options=("absolute", "relative", "both"),
@@ -194,7 +210,7 @@ if result is not None and result_config is not None:
                         if term.stage != stage:
                             continue
                         st.markdown(f"**{term.label}**")
-                        st.latex(term.symbolic)
+                        st.markdown(f"$${term.symbolic}$$")
                         st.write(f"Runtime substitution: {term.evaluated}")
                         st.caption(f"Source: {term.source}")
                         st.caption(f"Assumptions: {term.assumptions}")
@@ -205,8 +221,19 @@ if result is not None and result_config is not None:
         st.subheader("Mathematics used by this run")
         for title, latex, explanation in active_math_sections(result_config):
             st.markdown(f"### {title}")
-            st.latex(latex)
+            st.markdown(f"$${latex}$$")
             st.write(explanation)
+
+    with reasoning_tab:
+        st.subheader("Why this method / why it wins or fails")
+        for title, explanation in active_reasoning(result_config):
+            with st.expander(title, expanded=True):
+                st.write(explanation)
+        st.markdown(
+            "[Full system-specific method comparison]"
+            "(https://github.com/EshMis/QLS_testing/blob/main/docs/reasoning/"
+            "method_comparisons_specific_system.md)"
+        )
 
     with advanced_tab:
         st.caption("Lifted coordinates are retained only for truncation, instability, and solver diagnostics.")

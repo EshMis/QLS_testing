@@ -65,6 +65,17 @@ This implements the supplied PRL paper's nondiagonal density-matrix encoding on
 the reduced order-1 nine-variable enzyme model and compares all physical
 variables against the exact reduced-model exponential.
 
+The recommended fast PennyLane Lindbladian practice run and optional full
+order-1 enzyme channel run are:
+
+```bash
+python scripts/run_from_cli.py --config configs/examples/lindblad_practice_pennylane.yaml
+python scripts/run_from_cli.py --config configs/examples/lindblad_enzyme_pennylane.yaml
+```
+
+Both use the same independent exact-Liouvillian ground truth. The PennyLane path
+applies normalized short-time Kraus channels on `default.mixed`.
+
 Working PennyLane HHL and QSVT demos:
 
 ```bash
@@ -142,12 +153,19 @@ pipeline suitable for CI.
 - [Complexity derivations and runtime provenance](docs/math/complexity_derivations.md)
 - [Enzyme ODE and quantum-pipeline problem guide](docs/problem/enzyme_ode_and_quantum_pipeline.md)
 - [Implementation rationale and research trail](docs/reasoning/implementation_rationale.md)
+- [System-specific method comparisons](docs/reasoning/method_comparisons_specific_system.md)
 - [PennyLane circuits](docs/math/pennylane_quantum.md)
 - [Lindblad simulation](docs/math/lindblad.md)
 - [Practice systems](docs/math/practice_systems.md)
 - [Dashboard guide](docs/dashboard.md)
 - [Implementation status and roadmap](docs/roadmap.md)
 - [API reference](docs/api_reference.md)
+
+Markdown math uses GitHub-compatible `$...$` and `$$...$$` delimiters. Verify it with:
+
+```bash
+python scripts/normalize_markdown_math.py --check
+```
 
 ## Known limitations
 
