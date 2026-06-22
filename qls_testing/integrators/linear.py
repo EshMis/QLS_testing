@@ -11,6 +11,12 @@ from scipy.sparse.linalg import expm_multiply
 from qls_testing.core.datatypes import IntegrationResult, LinearizedSystem, SolveResult
 from qls_testing.core.interfaces import Integrator, LinearSolver
 from qls_testing.core.utils import uniform_grid
+from qls_testing.hardware_path.folded_systems import (
+    FoldedSystem,
+    build_folded_backward_euler,
+    build_folded_bdf2,
+    build_folded_crank_nicolson,
+)
 
 
 def _result(
@@ -85,14 +91,56 @@ class FoldedBackwardEulerIntegrator(Integrator):
     def integrate(self, system: LinearizedSystem, solver: LinearSolver, *, t_final: float, dt: float, n_points: int | None = None, **options: object) -> IntegrationResult:
         times = uniform_grid(t_final, dt)
         steps = len(times) - 1
-        n = system.matrix.shape[0]
-        step_matrix = np.eye(n) - dt * system.matrix
-        folded = np.kron(np.eye(steps), step_matrix) + np.kron(np.diag(-np.ones(steps - 1), -1), np.eye(n))
-        rhs = np.zeros(steps * n, dtype=np.result_type(system.matrix, system.initial_state))
-        rhs[:n] = system.initial_state
-        solved = solver.solve(folded, rhs)
-        states = np.vstack((system.initial_state, solved.solution.reshape(steps, n)))
-        return _result(times, states, [solved], output_stride=int(options.get("output_stride", 1)), method="folded_backward_euler", lhs_condition=float(np.linalg.cond(folded)))
+        folded = build_folded_backward_euler(system.matrix, system.initial_state, dt, steps)
+        return _integrate_folded(times, system, folded, solver, options)
+
+
+class FoldedCrankNicolsonIntegrator(Integrator):
+    """Prepare the complete Crank--Nicolson trajectory with one solve/readout state."""
+
+    def integrate(self, system: LinearizedSystem, solver: LinearSolver, *, t_final: float, dt: float, n_points: int | None = None, **options: object) -> IntegrationResult:
+        times = uniform_grid(t_final, dt)
+        folded = build_folded_crank_nicolson(
+            system.matrix, system.initial_state, dt, len(times) - 1
+        )
+        return _integrate_folded(times, system, folded, solver, options)
+
+
+class FoldedBDF2Integrator(Integrator):
+    """Prepare a BE-bootstrapped BDF2 trajectory with one solve/readout state."""
+
+    def integrate(self, system: LinearizedSystem, solver: LinearSolver, *, t_final: float, dt: float, n_points: int | None = None, **options: object) -> IntegrationResult:
+        times = uniform_grid(t_final, dt)
+        folded = build_folded_bdf2(system.matrix, system.initial_state, dt, len(times) - 1)
+        return _integrate_folded(times, system, folded, solver, options)
+
+
+def _integrate_folded(
+    times: np.ndarray,
+    system: LinearizedSystem,
+    folded: FoldedSystem,
+    solver: LinearSolver,
+    options: dict[str, object],
+) -> IntegrationResult:
+    """Run a folded builder through the existing dense solver plugin boundary."""
+    dense = folded.matrix.toarray()
+    solved = solver.solve(dense, folded.rhs)
+    states = np.vstack(
+        (system.initial_state, solved.solution.reshape(folded.steps, folded.state_dimension))
+    )
+    condition = float(np.linalg.cond(dense)) if folded.dimension <= 1000 else float("nan")
+    return _result(
+        times,
+        states,
+        [solved],
+        output_stride=int(options.get("output_stride", 1)),
+        method=folded.method,
+        lhs_condition=condition,
+        folded_dimension=folded.dimension,
+        folded_nnz=int(folded.matrix.nnz),
+        kronecker_term_count=len(folded.kronecker_terms),
+        qls_calls=1,
+    )
 
 
 class Pade22Integrator(Integrator):

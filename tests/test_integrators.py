@@ -7,6 +7,9 @@ from qls_testing.integrators.linear import (
     BDF2Integrator,
     BackwardEulerIntegrator,
     CrankNicolsonIntegrator,
+    FoldedBDF2Integrator,
+    FoldedBackwardEulerIntegrator,
+    FoldedCrankNicolsonIntegrator,
     KrylovExponentialIntegrator,
 )
 from qls_testing.qls.classical import ClassicalSolver
@@ -51,3 +54,22 @@ def test_sparse_krylov_matches_analytic_exponential():
     )
     np.testing.assert_allclose(result.states[-1], np.exp([-1.0, -2.0, -3.0]) * initial, atol=1e-12)
     assert result.metadata["nnz"] == 3
+
+
+@pytest.mark.parametrize(
+    ("sequential", "folded"),
+    [
+        (BackwardEulerIntegrator(), FoldedBackwardEulerIntegrator()),
+        (CrankNicolsonIntegrator(), FoldedCrankNicolsonIntegrator()),
+        (BDF2Integrator(), FoldedBDF2Integrator()),
+    ],
+)
+def test_folded_history_system_matches_sequential_integrator(sequential, folded):
+    system = linear_system(
+        np.asarray([[-1.0, 0.25], [0.1, -0.7]]), np.asarray([1.0, -0.2])
+    )
+    expected = sequential.integrate(system, ClassicalSolver(), t_final=0.4, dt=0.1)
+    actual = folded.integrate(system, ClassicalSolver(), t_final=0.4, dt=0.1)
+    np.testing.assert_allclose(actual.states, expected.states, atol=2e-13)
+    assert actual.metadata["qls_calls"] == 1
+    assert actual.metadata["folded_dimension"] == 8

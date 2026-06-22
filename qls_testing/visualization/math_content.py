@@ -51,6 +51,8 @@ def active_math_sections(config: Config) -> tuple[tuple[str, str, str], ...]:
         integrator_math = {
             "backward_euler": r"(I-\Delta t A)y_{k+1}=y_k",
             "folded_backward_euler": r"\mathcal M\,(y_1,\ldots,y_K)^T=(y_0,0,\ldots,0)^T",
+            "folded_crank_nicolson": r"[I_K\otimes(I-\tfrac h2A)-L\otimes(I+\tfrac h2A)]Y=b",
+            "folded_bdf2": r"[I_K\otimes(\tfrac32I-hA)-2L_1\otimes I+\tfrac12L_2\otimes I+E_{00}\otimes(-\tfrac12I)]Y=b",
             "crank_nicolson": r"(I-\tfrac{\Delta t}{2}A)y_{k+1}=(I+\tfrac{\Delta t}{2}A)y_k",
             "bdf2": r"(\tfrac32 I-\Delta t A)y_{k+1}=2y_k-\tfrac12y_{k-1}",
             "pade22": r"(I-\tfrac t2A+\tfrac{t^2}{12}A^2)y(t)=(I+\tfrac t2A+\tfrac{t^2}{12}A^2)y_0",

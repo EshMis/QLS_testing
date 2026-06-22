@@ -115,19 +115,23 @@ class DefaultComplexityEstimator(ComplexityEstimator):
                 )
             )
             asymptotic["integrator"] = "O(N_step*nnz(A_C)) rhs work plus N_solve selected-solver calls"
-        elif integrator_name == "folded_backward_euler":
-            folded_dimension = steps * dimension
+        elif integrator_name in {
+            "folded_backward_euler", "folded_crank_nicolson", "folded_bdf2"
+        }:
+            folded_dimension = int(integration.metadata.get("folded_dimension", steps * dimension))
+            folded_nnz = int(integration.metadata.get("folded_nnz", 0))
+            kron_terms = int(integration.metadata.get("kronecker_term_count", 0))
             terms.append(
                 ComplexityTerm(
                     "Integrator",
-                    "Folded all-at-once system",
-                    r"D_F=N_{\rm step}D,\qquad C_{\rm assemble}=O(N_{\rm step}(D^2+D))",
-                    f"D_F={folded_dimension}; one solve of a {folded_dimension}x{folded_dimension} system",
-                    "Kronecker assembly of the block lower-bidiagonal backward-Euler equations.",
-                    "The current implementation materializes the folded operator densely.",
+                    f"{integrator_name} all-at-once system",
+                    r"D_F=N_{\rm step}D,\qquad M_F=\sum_{j=1}^{r}T_j\otimes S_j",
+                    f"D_F={folded_dimension}, nnz={folded_nnz}, Kronecker terms={kron_terms}; one QLS call",
+                    "Sparse time-shift/state-operator assembly in hardware_path/folded_systems.py.",
+                    "The current solver plugin boundary becomes dense; hardware work should compile the Kronecker terms directly.",
                 )
             )
-            asymptotic["integrator"] = "one solve at folded dimension N_step*D"
+            asymptotic["integrator"] = "one QLS solve at folded dimension N_step*D"
         elif integrator_name == "pade22":
             terms.append(
                 ComplexityTerm(

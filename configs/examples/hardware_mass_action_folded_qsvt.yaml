@@ -1,0 +1,15 @@
+system:
+  name: mass_action_pathway
+  initial_substrate: 3.0
+linearization:
+  name: carleman
+  settings: {order: 2}
+integrator: {name: folded_bdf2}
+qls:
+  name: qsvt_simulator
+  settings: {degree: 31, rcond: 1.0e-12}
+time: {t_final: 0.2, dt: 0.1, n_points: 3}
+output: {directory: outputs/hardware_mass_action_folded_qsvt, save_plot: true}
+error: {enabled: true}
+complexity: {enabled: true}
+random_seed: 42

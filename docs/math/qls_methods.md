@@ -114,3 +114,9 @@ statevector extraction are suitable for validation, not scalable readout.
 The block-encoding demo uses PennyLane `BlockEncode` and verifies that projecting
 the ancilla-zero branch returns $A|b\rangle/\alpha$. CSR oracle data forms a
 stable interface boundary for a future sparse circuit implementation.
+
+The hardware-path offshoot additionally constructs an exact PREP/SELECT LCU
+unitary for tiny folded systems, executes it in PennyLane, and verifies its
+projected action. The full target is represented by sparse Carleman and time-
+shift oracles rather than a dense `BlockEncode`; see the
+[structured block-encoding analysis](../hardware_path/structured_block_encoding.md).

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGETS = (ROOT / "README.md", ROOT / "docs" / "math", ROOT / "docs" / "problem", ROOT / "docs" / "reasoning")
+TARGETS = (ROOT / "README.md", ROOT / "docs")
 
 
 def markdown_files() -> list[Path]:

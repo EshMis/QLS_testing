@@ -40,7 +40,8 @@ integrator_options = (
     if is_ndme
     else (
         "bdf2", "backward_euler", "crank_nicolson", "krylov_exponential",
-        "rk45", "folded_backward_euler", "pade22",
+        "rk45", "folded_backward_euler", "folded_crank_nicolson", "folded_bdf2",
+        "pade22",
     )
 )
 integrator = st.sidebar.selectbox(
@@ -98,7 +99,10 @@ if is_ndme:
     st.sidebar.info(
         f"NDME uses {pathway}, not a QLS. Order 1 keeps the density matrix interactive."
     )
-fixed_step_methods = {"bdf2", "backward_euler", "crank_nicolson", "folded_backward_euler"}
+fixed_step_methods = {
+    "bdf2", "backward_euler", "crank_nicolson", "folded_backward_euler",
+    "folded_crank_nicolson", "folded_bdf2",
+}
 grid_valid = is_ndme or integrator not in fixed_step_methods or np.isclose(
     t_final / dt, round(t_final / dt)
 )

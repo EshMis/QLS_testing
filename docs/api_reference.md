@@ -14,6 +14,12 @@
   Liouvillian references from `qls_testing.reference.reference_solver`.
 - `NDMEEncoding`: shared operators and the single off-diagonal extraction map
   used by classical, PennyLane, and ground-truth Lindbladian paths.
+- `FoldedSystem`: sparse all-at-once BE/CN/BDF2 matrix, right-hand side, and
+  exact time/state Kronecker terms.
+- `LCUBlockEncoding`: explicit small-instance PREP/SELECT unitary with projected
+  block and normalization metadata.
+- `CarlemanStructureReport` / `ReadoutPlan`: pathway-family sparsity, symmetric-
+  lift verification, qubits, postselection, and targeted-observable costs.
 - `LindbladModel` / `LindbladResult`: separate master-equation representation.
 - `NDMELindbladResult`: PDF-based off-diagonal encoding, extraction, and physicality diagnostics.
 - `PracticeSystem`: exact-reference matrix benchmark plus structural metadata.

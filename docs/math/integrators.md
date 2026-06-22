@@ -19,7 +19,8 @@ $$
 It is first-order and A-stable. The `folded_backward_euler` variant stacks every
 step in a single block lower-bidiagonal system with $I-\Delta tA$ on its block
 diagonal and $-I$ below it. This is useful for studying one-shot history-state
-QLS formulations, although its dense simulation is expensive.
+QLS formulations. It is now assembled sparsely as three exact Kronecker terms,
+although the generic solver plugin boundary still becomes dense.
 
 ## Crank–Nicolson
 
@@ -39,6 +40,18 @@ $$
 
 BDF2 is second-order and A-stable. A backward-Euler step supplies $y_1$, so
 the global error includes a one-step startup contribution.
+
+## Folded second-order methods
+
+`folded_crank_nicolson` and `folded_bdf2` encode their complete trajectories in
+one sparse linear system and make one solver call. CN uses four time/state
+Kronecker terms. BE-bootstrapped BDF2 uses five because it needs first- and
+second-subdiagonal shifts plus a startup correction. Both exactly match their
+sequential counterparts in tests.
+
+For the fixed order-2 mass-action hardware target, their 50-step matrices have
+dimension 2700. Dimensions, nonzeros, conditioning, LCU terms, and readout
+tradeoffs are in [the hardware-path analysis](../hardware_path/README.md).
 
 ## Global Padé [2/2]
 

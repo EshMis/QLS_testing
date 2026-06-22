@@ -198,3 +198,6 @@ Success means stable physical observables on a fixed ground-truth grid, residual
 or channel errors below the chosen approximation budget, nonvanishing success
 probability, and resource estimates that include preparation and readout.
 
+For the fixed mass-action/order-2/folded-QSVT design, continue with the
+[hardware-path guide](../hardware_path/README.md), which includes measured
+2700×2700 matrix resources and an observable-focused readout contract.

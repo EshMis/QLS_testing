@@ -34,6 +34,8 @@ def active_reasoning(config: Config) -> tuple[tuple[str, str], ...]:
         "crank_nicolson": "Second-order and accurate here; very stiff lifted modes can ring because it is not L-stable.",
         "bdf2": "Second-order with useful stiff damping; the backward-Euler startup matters at short horizons.",
         "folded_backward_euler": "One history-state solve, but dimension and conditioning grow with all time steps.",
+        "folded_crank_nicolson": "One second-order history solve with better observed conditioning, but it is not L-stable.",
+        "folded_bdf2": "One second-order history solve with stiff damping; bootstrap and two time shifts add LCU terms.",
         "pade22": "A global low-order rational exponential; long horizons can leave its approximation region.",
         "rk45": "Adaptive classical validation; fast lifted modes increase RHS evaluations and it exposes no QLS.",
         "krylov_exponential": "Exploits the sparse constant lift and usually reaches the Carleman truncation floor efficiently.",

@@ -101,7 +101,8 @@ Available method names are:
 - linearization: `carleman`
 - linearization controller: `adaptive_restarted_carleman`
 - integrators: `backward_euler`, `crank_nicolson`, `bdf2`,
-  `folded_backward_euler`, `pade22`, `rk45`, `exponential`, `krylov_exponential`
+  `folded_backward_euler`, `folded_crank_nicolson`, `folded_bdf2`, `pade22`,
+  `rk45`, `exponential`, `krylov_exponential`
 - solvers: `classical`, `hhl_simulator`, `qsvt_simulator`, `vqls_simulator`,
   `pennylane_hhl`, `pennylane_qsvt`, `pennylane_vqls`,
   `pennylane_complex_vqls`, `preconditioned_qsvt`, `iterative_refinement`
@@ -115,6 +116,23 @@ convenience, not a quantum complexity claim.
 
 The practice suite provides seven exact-reference systems spanning sparse,
 dense, non-normal, growing, oscillatory, complex, and 2--16-dimensional cases.
+
+## Hardware-oriented QSVT path
+
+The focused hardware offshoot fixes mass action + Carleman order 2 and studies
+one-readout folded BE/CN/BDF2 systems, structured LCU block encoding, QSVT
+conditioning, terminal padding, and observable-level readout:
+
+```bash
+python scripts/analyze_hardware_path.py --estimate-condition
+python scripts/run_from_cli.py \
+  --config configs/examples/hardware_mass_action_folded_qsvt.yaml
+```
+
+See [the hardware-path guide](docs/hardware_path/README.md). The explicit LCU
+unitary runs in PennyLane for tiny validation cases; the full 2700-dimensional
+target remains an oracle/resource design until its sparse reversible components
+are compiled.
 
 ## Architecture and extension
 

@@ -11,6 +11,13 @@ from qls_testing.quantum_pennylane import (
     PennyLaneVQLSSolver,
     projected_block_encoding_action,
 )
+from qls_testing.hardware_path.block_encoding import (
+    build_lcu_block_encoding,
+    folded_lcu_matrices,
+    pennylane_projected_lcu_action,
+)
+from qls_testing.hardware_path.folded_systems import build_folded_backward_euler
+from qls_testing.hardware_path.readout import pennylane_overlap_quadratures
 
 
 def test_block_encoding_postselection_applies_matrix():
@@ -20,6 +27,27 @@ def test_block_encoding_postselection_applies_matrix():
     action, probability = projected_block_encoding_action(matrix, state)
     np.testing.assert_allclose(action, matrix @ state, atol=1e-11)
     assert 0.0 < probability <= 1.0
+
+
+def test_pennylane_executes_structured_lcu_encoder_for_tiny_folded_system():
+    folded = build_folded_backward_euler(
+        np.asarray([[-1.0, 0.2], [0.0, -0.5]]), np.asarray([1.0, 0.0]), 0.1, 2
+    )
+    matrices, labels = folded_lcu_matrices(folded)
+    encoding = build_lcu_block_encoding(matrices, labels=labels)
+    state = np.asarray([1.0, -0.2, 0.3, 0.1])
+    action, probability = pennylane_projected_lcu_action(encoding, state)
+    expected = encoding.matrix @ (state / np.linalg.norm(state))
+    np.testing.assert_allclose(action[: len(state)], expected, atol=2e-10)
+    assert 0.0 < probability <= 1.0
+
+
+def test_pennylane_interference_readout_recovers_signed_amplitude():
+    state = np.asarray([0.6, -0.8j])
+    reference = np.asarray([0.0, 1.0])
+    real, imaginary = pennylane_overlap_quadratures(state, reference)
+    assert abs(real) < 1e-12
+    assert np.isclose(imaginary, 0.8, atol=1e-12)
 
 
 def test_pennylane_vqls_solves_tiny_nonhermitian_system():
