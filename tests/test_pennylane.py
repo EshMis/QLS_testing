@@ -31,6 +31,26 @@ def test_pennylane_vqls_solves_tiny_nonhermitian_system():
     assert result.relative_residual < 2e-4
     assert result.metadata["backend"] == "default.qubit"
     assert result.metadata["circuit_depth"] > 0
+    assert result.metadata["parameter_change_norm"] > 1e-6
+    assert result.metadata["state_change_norm"] > 1e-6
+    assert min(result.metadata["loss_history"]) < result.metadata["initial_cost"]
+    assert max(result.metadata["gradient_norm_history"]) > 1e-8
+    assert max(result.metadata["parameter_update_norm_history"]) > 1e-8
+    assert len(result.metadata["solution_history"]) >= 2
+
+
+def test_pennylane_vqls_shots_execute_nontrivial_sampled_readout():
+    matrix = np.array([[1.8, 0.2], [0.1, 1.2]])
+    rhs = np.array([1.0, 0.4])
+    shots = 400
+    result = PennyLaneVQLSSolver(
+        layers=2, max_steps=120, stepsize=0.08, seed=4, shots=shots
+    ).solve(matrix, rhs)
+    probabilities = np.asarray(result.metadata["measured_probabilities"])
+    assert np.isclose(probabilities.sum(), 1.0)
+    assert np.count_nonzero(probabilities) > 1
+    np.testing.assert_allclose(probabilities * shots, np.round(probabilities * shots), atol=1e-10)
+    assert result.metadata["probability_entropy"] > 0.0
 
 
 @pytest.mark.parametrize(
@@ -86,3 +106,5 @@ def test_toy_ode_pipeline_runs_with_pennylane_solver():
     result = run_experiment(config)
     assert result.physical_states.shape == (3, 2)
     assert result.metrics["max_relative_linear_solve_residual"] < 1e-3
+    assert np.all(np.linalg.norm(np.diff(result.physical_states, axis=0), axis=1) > 1e-3)
+    assert result.integration.solve_diagnostics[1].metadata["used_warm_start"] is True

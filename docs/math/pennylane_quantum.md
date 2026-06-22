@@ -17,22 +17,31 @@ exposes CSR row, column, and value arrays for later oracle circuits.
 ## VQLS circuit
 
 RY layers and nearest-neighbor CNOTs prepare a real normalized state
-\(u(\theta)\). For \(y=Au\), the optimal scale is
+\(u(\theta)\). The effective layer count is raised when the requested circuit
+has fewer parameters than the padded real state has degrees of freedom. For
+\(y=Au\), the optimal scale is
 
 \[
 s(\theta)=\frac{\langle y,b\rangle}{\langle y,y\rangle},
 \]
 
 and Adam minimizes \(\|Asu-b\|^2/\|b\|^2\) through a PennyLane QNode. Padding
-uses an identity block, preserving the original solution. Diagnostics include
-qubits, depth, optimization steps, cost, actual residual, and sampling standard
-error proxy.
+uses an identity block, preserving the original solution. Each ODE solve starts
+from the previous solve's optimized weights when shape-compatible.
 
-Limitations: the present ansatz is real, tiny-system oriented, noiseless by
-default, and returns a simulator statevector. `pennylane_complex_vqls` adds RZ
-phases and a complex optimal scale. `loss_mode: shot_proxy` records binomial
-sampling uncertainty but still optimizes the exact statevector loss; a fully
-shot-trained likelihood objective remains future work.
+The notebook's frozen/near-zero trajectory combined a complex ansatz with real
+integration storage, a shallow under-parameterized padded state, and a shots
+argument that never reached a sampled circuit. The real plugin now keeps real
+amplitudes end to end; complex evolution is opt-in. Instrumentation stores loss,
+gradient and update norms, residual proxies, intermediate solutions, parameter
+samples, state displacement, probabilities, entropy, and variance.
+
+Limitations: the default ansatz is real, tiny-system oriented, and returns a
+simulator statevector. `pennylane_complex_vqls` adds RZ phases and a complex
+optimal scale. With `shots`, a second QNode performs actual finite-shot
+probability readout. Training remains on the analytic differentiable statevector
+loss; probabilities alone do not recover amplitude signs/phases, so a fully
+shot-trained phase-sensitive loss remains future work.
 
 ## PennyLane HHL
 
@@ -71,4 +80,3 @@ degree until PennyLane synthesizes stable phases, records requested/effective
 degrees, and always judges success using the original-system residual.
 
 Both HHL and QSVT expose full amplitudes only in laptop-scale demo mode.
-

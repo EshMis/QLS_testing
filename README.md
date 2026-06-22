@@ -38,7 +38,8 @@ streamlit run qls_testing/visualization/app_streamlit.py
 ```
 
 The dashboard defaults to separate physical `S`, `Xs`, `P`, and `Cs`
-pipeline/reference/error graphs. It provides point inspection, hover/zoom,
+pipeline/reference/error graphs. Error display switches between absolute,
+relative, or both while preserving one hue per variable. It provides point inspection, hover/zoom,
 staged errors, LaTeX math and complexity, CSV/NPZ/HTML exports, and keeps lifted
 coordinates under Advanced / Debug.
 PDF export is available from the non-interactive script when Kaleido is installed:
@@ -138,6 +139,9 @@ pipeline suitable for CI.
 - [Integrators](docs/math/integrators.md)
 - [QLS methods](docs/math/qls_methods.md)
 - [Error decomposition and complexity](docs/math/error_and_complexity.md)
+- [Complexity derivations and runtime provenance](docs/math/complexity_derivations.md)
+- [Enzyme ODE and quantum-pipeline problem guide](docs/problem/enzyme_ode_and_quantum_pipeline.md)
+- [Implementation rationale and research trail](docs/reasoning/implementation_rationale.md)
 - [PennyLane circuits](docs/math/pennylane_quantum.md)
 - [Lindblad simulation](docs/math/lindblad.md)
 - [Practice systems](docs/math/practice_systems.md)
@@ -160,5 +164,7 @@ pipeline suitable for CI.
   simulators return full vectors strictly for numerical verification.
 - Staged errors are computable discrepancy proxies, not rigorous additive upper
   bounds; norms remove signs, so their scalar sum need not equal total error.
-- PennyLane quantum modes are tiny-system statevector demonstrations. Shot
-  variance is estimated when `shots` is supplied; shot-trained losses remain partial.
+- PennyLane quantum modes are tiny-system statevector demonstrations. VQLS uses
+  a real sampled probability QNode when `shots` is supplied, while its
+  phase-sensitive training loss remains analytic; fully shot-trained losses are
+  future work.

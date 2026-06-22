@@ -41,4 +41,9 @@ def test_enzyme_ndme_pipeline_compares_all_nine_physical_variables():
     assert result.reference_states.shape == (5, 9)
     assert result.metrics["global_rmse"] < 1e-8
     assert result.metrics["reference_scope"].startswith("exact exponential")
-
+    report = result.complexity_report
+    assert report.stages == ("Linearization", "Lindbladian / NDME")
+    assert "d_\\rho=2D" in next(
+        term.symbolic for term in report.terms if term.label == "Density-matrix embedding"
+    )
+    assert "Linear solver" not in report.stages

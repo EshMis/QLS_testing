@@ -103,7 +103,11 @@ history is retained for the error dashboard.
 
 `pennylane_vqls` prepares \(u(\theta)\) with RY layers and entanglers on
 `default.qubit`, eliminates the optimal magnitude analytically, and differentiates
-the normalized residual loss with PennyLane/Autograd. It is tested on a 2×2
+the normalized residual loss with PennyLane/Autograd. It expands an
+under-parameterized requested ansatz, warm-starts sequential ODE solves, and
+records optimizer histories. With shots it executes a separate sampled
+probability QNode; the trainable loss remains analytic because probabilities
+alone lose amplitude signs/phases. It is tested on a 2×2
 non-Hermitian system and the two-state toy ODE. Its optimization and full
 statevector extraction are suitable for validation, not scalable readout.
 

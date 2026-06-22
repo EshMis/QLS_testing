@@ -107,13 +107,19 @@ if result is not None and result_config is not None:
     with results_tab:
         st.subheader("Pipeline versus reference")
         st.caption(result.metrics.get("reference_scope", "Reference: high-accuracy physical model."))
+        error_mode = st.segmented_control(
+            "Error traces",
+            options=("absolute", "relative", "both"),
+            default="absolute",
+            help="The lower plot and summary rescale to the selected error definition.",
+        ) or "absolute"
         group_tabs = st.tabs(tuple(group.key for group in groups))
         for group, group_tab in zip(groups, group_tabs):
             with group_tab:
                 chart_col, detail_col = st.columns((4, 1))
                 with chart_col:
                     event = st.plotly_chart(
-                        observable_comparison_figure(result, group),
+                        observable_comparison_figure(result, group, error_mode=error_mode),
                         width="stretch",
                         on_select="rerun",
                         selection_mode="points",
@@ -130,8 +136,10 @@ if result is not None and result_config is not None:
                         if len(custom) >= 4:
                             st.write(f"Variable: `{custom[3]}`")
                             st.write(f"Reference: `{float(custom[0]):.8g}`")
-                            st.write(f"Absolute error: `{float(custom[1]):.3e}`")
-                            st.write(f"Relative error: `{float(custom[2]):.3e}`")
+                            if error_mode in {"absolute", "both"}:
+                                st.write(f"Absolute error: `{float(custom[1]):.3e}`")
+                            if error_mode in {"relative", "both"}:
+                                st.write(f"Relative error: `{float(custom[2]):.3e}`")
                         if result.error_report:
                             time_index = int(np.argmin(np.abs(result.error_report.times - float(point.get("x", 0.0)))))
                             st.markdown("**Staged errors**")
@@ -139,8 +147,29 @@ if result is not None and result_config is not None:
                                 st.write(f"{name}: `{float(values[time_index]):.3e}`")
                     else:
                         st.info("Click a pipeline or error point to inspect it.")
+        error_rows = []
+        for index, label in enumerate(physical_labels):
+            absolute = np.abs(
+                np.asarray(result.physical_states[:, index]).real
+                - np.asarray(result.reference_states[:, index]).real
+            )
+            row: dict[str, object] = {"variable": label}
+            if error_mode in {"absolute", "both"}:
+                row.update({"final absolute": absolute[-1], "maximum absolute": np.max(absolute)})
+            if error_mode in {"relative", "both"}:
+                relative = absolute / np.maximum(
+                    np.abs(np.asarray(result.reference_states[:, index]).real), 1e-12
+                )
+                row.update({"final relative": relative[-1], "maximum relative": np.max(relative)})
+            error_rows.append(row)
+        st.markdown(f"#### {error_mode.title()} error summary")
+        st.dataframe(error_rows, width="stretch", hide_index=True)
 
     with error_tab:
+        st.caption(
+            "These are staged pipeline diagnostics (truncation, discretization, and solver residual effects), "
+            "not the selectable pointwise absolute/relative error shown on Results."
+        )
         st.plotly_chart(error_figure(result), width="stretch")
         if result.error_report:
             st.dataframe(
@@ -153,17 +182,22 @@ if result is not None and result_config is not None:
         if result.complexity_report:
             st.warning(result.complexity_report.caveat)
             metrics = result.complexity_report.metrics
+            st.subheader("This run's complexity")
             st.markdown(
                 f"**Runtime drivers:** lifted dimension `{metrics.get('lifted_dimension')}`, "
                 f"nonzeros `{metrics.get('nnz')}`, solves `{metrics.get('linear_solves')}`, "
                 f"condition proxy `{float(metrics.get('condition_number_proxy', 0.0)):.3g}`."
             )
-            st.latex(r"D(n,N)=\sum_{k=1}^{N}{n+k-1\choose k}")
-            st.latex(r"C_{\rm dense}=O(N_{\rm steps}D^3),\qquad C_{\rm sparse}\approx O(m\,\mathrm{nnz}(A))")
-            if result_config.system.name == "lindblad_enzyme_ndme":
-                st.latex(r"C_{\rm NDME}=\widetilde O\!\left(\eta_T^{-1}\alpha_VT\frac{\log(1/\epsilon)}{\log\log(1/\epsilon)}\right)")
-            else:
-                st.latex(r"C_{\rm QSVT}=O\!\left(\kappa\log(1/\epsilon)\right)\text{ block-encoding queries}")
+            for stage in result.complexity_report.stages:
+                with st.expander(stage, expanded=True):
+                    for term in result.complexity_report.terms:
+                        if term.stage != stage:
+                            continue
+                        st.markdown(f"**{term.label}**")
+                        st.latex(term.symbolic)
+                        st.write(f"Runtime substitution: {term.evaluated}")
+                        st.caption(f"Source: {term.source}")
+                        st.caption(f"Assumptions: {term.assumptions}")
             with st.expander("All estimated metrics"):
                 st.json(result.complexity_report.to_dict())
 
@@ -180,7 +214,33 @@ if result is not None and result_config is not None:
         st.plotly_chart(variable_figure(result, label), width="stretch")
         st.write("Integration metadata", result.integration.metadata)
         if result.integration.solve_diagnostics:
-            st.write("Latest solver diagnostics", result.integration.solve_diagnostics[-1].metadata)
+            latest_result = result.integration.solve_diagnostics[-1]
+            latest = latest_result.metadata
+            st.write(
+                "Latest solver summary",
+                {
+                    "method": latest.get("method"),
+                    "absolute_residual": latest_result.residual_norm,
+                    "relative_residual": latest_result.relative_residual,
+                    "steps": latest.get("steps"),
+                    "condition_number": latest.get("condition_number"),
+                },
+            )
+            if latest.get("method") == "pennylane_vqls":
+                with st.expander("VQLS optimizer diagnostics", expanded=True):
+                    st.metric("Initial loss", f"{float(latest['initial_cost']):.3e}")
+                    st.metric("Best loss", f"{float(latest['cost']):.3e}")
+                    st.metric("Parameter change", f"{float(latest['parameter_change_norm']):.3e}")
+                    st.line_chart(
+                        {
+                            "loss": latest["loss_history"],
+                            "gradient norm": [np.nan, *latest["gradient_norm_history"]],
+                            "update norm": [np.nan, *latest["parameter_update_norm_history"]],
+                        }
+                    )
+                    st.write("Measured probabilities", latest["measured_probabilities"])
+            with st.expander("Raw solver metadata"):
+                st.json(latest)
 
     st.download_button("Export CSV", result_csv(result), "qls_results.csv", "text/csv")
     st.download_button("Export NPZ + staged errors", result_npz(result), "qls_results.npz", "application/octet-stream")

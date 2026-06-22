@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from plotly.colors import qualitative
 import numpy as np
 
 from qls_testing.core.datatypes import ExperimentResult
@@ -85,15 +86,28 @@ def lindblad_figure(result: LindbladResult) -> go.Figure:
 
 
 def observable_comparison_figure(
-    result: ExperimentResult, group: ObservableGroup
+    result: ExperimentResult,
+    group: ObservableGroup,
+    error_mode: str = "absolute",
 ) -> go.Figure:
-    """Compare pipeline/reference and absolute/relative errors for one observable group."""
+    """Compare trajectories and show only the user-selected error definition.
+
+    A variable keeps one hue across pipeline, reference, and error traces;
+    line style distinguishes the estimate from the reference and error type.
+    """
+    if error_mode not in {"absolute", "relative", "both"}:
+        raise ValueError("error_mode must be 'absolute', 'relative', or 'both'")
+    error_title = {
+        "absolute": "Absolute error",
+        "relative": "Relative error",
+        "both": "Absolute and relative error",
+    }[error_mode]
     figure = make_subplots(
         rows=2,
         cols=1,
         shared_xaxes=True,
         vertical_spacing=0.12,
-        subplot_titles=(f"{group.title}: pipeline vs reference", "Absolute and relative error"),
+        subplot_titles=(f"{group.title}: pipeline vs reference", error_title),
     )
     if not group.labels:
         figure.add_annotation(
@@ -108,6 +122,7 @@ def observable_comparison_figure(
     physical_labels = result.linearized_system.labels[: result.linearized_system.physical_dimension]
     for label in group.labels:
         index = physical_labels.index(label)
+        color = qualitative.Safe[index % len(qualitative.Safe)]
         pipeline = np.asarray(result.physical_states[:, index]).real
         reference = np.asarray(result.reference_states[:, index]).real
         absolute = np.abs(pipeline - reference)
@@ -127,6 +142,7 @@ def observable_comparison_figure(
                 customdata=custom,
                 mode="lines+markers",
                 marker={"size": 4},
+                line={"color": color},
                 name=f"{label} pipeline",
                 hovertemplate=(
                     "variable=%{customdata[3]}<br>t=%{x:.6g}<br>pipeline=%{y:.6g}"
@@ -142,37 +158,40 @@ def observable_comparison_figure(
                 x=result.reference_times,
                 y=reference,
                 mode="lines",
-                line={"dash": "dash"},
+                line={"dash": "dash", "color": color},
                 name=f"{label} reference",
                 hovertemplate=f"{label} reference<br>t=%{{x:.6g}}<br>value=%{{y:.6g}}<extra></extra>",
             ),
             row=1,
             col=1,
         )
-        figure.add_trace(
-            go.Scatter(
-                x=result.integration.times,
-                y=absolute + 1e-18,
-                customdata=custom,
-                name=f"{label} absolute",
-                hovertemplate=f"{label}<br>t=%{{x:.6g}}<br>absolute=%{{y:.3e}}<extra></extra>",
-            ),
-            row=2,
-            col=1,
-        )
-        figure.add_trace(
-            go.Scatter(
-                x=result.integration.times,
-                y=relative + 1e-18,
-                customdata=custom,
-                line={"dash": "dot"},
-                name=f"{label} relative",
-                hovertemplate=f"{label}<br>t=%{{x:.6g}}<br>relative=%{{y:.3e}}<extra></extra>",
-            ),
-            row=2,
-            col=1,
-        )
-    figure.update_yaxes(type="log", row=2, col=1)
+        if error_mode in {"absolute", "both"}:
+            figure.add_trace(
+                go.Scatter(
+                    x=result.integration.times,
+                    y=absolute + 1e-18,
+                    customdata=custom,
+                    line={"color": color},
+                    name=f"{label} absolute",
+                    hovertemplate=f"{label}<br>t=%{{x:.6g}}<br>absolute=%{{y:.3e}}<extra></extra>",
+                ),
+                row=2,
+                col=1,
+            )
+        if error_mode in {"relative", "both"}:
+            figure.add_trace(
+                go.Scatter(
+                    x=result.integration.times,
+                    y=relative + 1e-18,
+                    customdata=custom,
+                    line={"dash": "dot", "color": color},
+                    name=f"{label} relative",
+                    hovertemplate=f"{label}<br>t=%{{x:.6g}}<br>relative=%{{y:.3e}}<extra></extra>",
+                ),
+                row=2,
+                col=1,
+            )
+    figure.update_yaxes(type="log", title_text=error_title, autorange=True, row=2, col=1)
     figure.update_xaxes(title_text="Time", row=2, col=1)
     figure.update_layout(
         template="plotly_white",

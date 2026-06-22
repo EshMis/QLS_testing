@@ -46,7 +46,7 @@ def test_ui_serialization_and_figures_smoke():
     assert len(error_figure(result).data) >= 4
 
 
-def test_observable_groups_match_notebook_state_order_and_plot_absolute_relative_errors():
+def test_observable_groups_and_selectable_error_plot_policy():
     labels = ("S", "X1", "X2", "X3", "P", "C1", "C2", "C3", "C4")
     groups = enzyme_observable_groups(labels)
     assert [group.key for group in groups] == ["S", "Xs", "P", "Cs"]
@@ -54,8 +54,28 @@ def test_observable_groups_match_notebook_state_order_and_plot_absolute_relative
     assert groups[3].labels == ("C1", "C2", "C3", "C4")
     result = toy_result()
     practice_group = observable_groups(("x", "y"))[0]
-    figure = observable_comparison_figure(result, practice_group)
-    assert len(figure.data) == 8  # pipeline, reference, absolute, relative per state
+    absolute = observable_comparison_figure(result, practice_group, "absolute")
+    relative = observable_comparison_figure(result, practice_group, "relative")
+    both = observable_comparison_figure(result, practice_group, "both")
+    assert len(absolute.data) == 6  # pipeline, reference, selected error per state
+    assert len(relative.data) == 6
+    assert len(both.data) == 8
+    assert all("relative" not in trace.name for trace in absolute.data)
+    assert all("absolute" not in trace.name for trace in relative.data)
+    # A variable keeps one color for pipeline/reference/error, while variables differ.
+    assert absolute.data[0].line.color == absolute.data[1].line.color == absolute.data[2].line.color
+    assert absolute.data[0].line.color != absolute.data[3].line.color
+
+
+def test_complexity_report_contains_only_selected_pipeline_stages_with_provenance():
+    result = toy_result()
+    report = result.complexity_report
+    assert report.stages == ("Linearization", "Integrator", "Linear solver")
+    assert all(term.symbolic and term.source and term.evaluated for term in report.terms)
+    serialized = str(report.to_dict()).lower()
+    assert "dense direct solve" in serialized
+    assert "hhl phase estimation" not in serialized
+    assert "qsvt inverse polynomial" not in serialized
 
 
 def test_math_sections_are_active_pipeline_specific():
