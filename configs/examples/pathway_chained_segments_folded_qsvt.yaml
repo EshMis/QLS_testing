@@ -1,0 +1,26 @@
+system:
+  name: pathway_graph
+  initial_substrate: 3.0
+pathway:
+  mode: chained_segments
+  segments:
+    - substrate: S
+      product: B1
+      intermediate_count: 1
+      intermediate_prefix: X
+    - substrate: B1
+      product: P
+      intermediate_count: 3
+      intermediate_prefix: Y
+linearization:
+  name: carleman
+  settings: {order: 2}
+integrator: {name: folded_backward_euler}
+qls:
+  name: qsvt_simulator
+  settings: {degree: 31, rcond: 1.0e-12}
+time: {t_final: 0.2, dt: 0.1, n_points: 3}
+output: {directory: outputs/pathway_chained_segments_folded_qsvt, save_plot: true}
+error: {enabled: true}
+complexity: {enabled: true}
+random_seed: 42

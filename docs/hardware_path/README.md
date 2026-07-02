@@ -57,8 +57,9 @@ quality. At $T=5$, $h=0.1$, the folded condition estimates are 536 (BE), 337
 PennyLane demonstrations. Structured preconditioning is therefore a prerequisite
 for a credible QSVT hardware run.
 
+- [Variable-intermediate pathway sweeps](pathway_sweeps.md)
+- [Scalable pathway solver walkthrough](pathway_solver_walkthrough.md)
 - [Integrator and low-readout alternatives](integrator_options.md)
 - [Structured block encoding](structured_block_encoding.md)
 - [Readout strategy](readout_strategy.md)
 - [Measured resource snapshot](resource_snapshot.md)
-

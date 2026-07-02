@@ -129,10 +129,26 @@ python scripts/run_from_cli.py \
   --config configs/examples/hardware_mass_action_folded_qsvt.yaml
 ```
 
+Variable-intermediate pathway sweeps and product-to-next-substrate chained
+pathway comparisons are available with capped resource analysis:
+
+```bash
+python scripts/analyze_hardware_path.py \
+  --intermediate-min 0 --intermediate-max 10 \
+  --output outputs/hardware_path/pathway_sweep.json
+
+python scripts/run_from_cli.py \
+  --config configs/examples/pathway_chain_m3_folded_qsvt.yaml
+```
+
 See [the hardware-path guide](docs/hardware_path/README.md). The explicit LCU
 unitary runs in PennyLane for tiny validation cases; the full 2700-dimensional
 target remains an oracle/resource design until its sparse reversible components
 are compiled.
+
+For a detailed explanation with diagrams, equations, report-field meanings, and
+commands, start with
+[the scalable pathway solver walkthrough](docs/hardware_path/pathway_solver_walkthrough.md).
 
 ## Architecture and extension
 

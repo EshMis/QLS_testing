@@ -1,0 +1,26 @@
+system:
+  name: pathway_graph
+  initial_substrate: 3.0
+pathway:
+  mode: chain
+  segments:
+    - substrate: S
+      product: P
+      intermediate_count: 3
+      intermediate_prefix: X
+      k1: [2.0, 1.5, 1.0, 2.0]
+      k_minus_1: [1.0, 0.5, 0.5, 1.0]
+      kcat: [3.0, 2.0, 2.5, 4.0]
+      enzyme_total: [1.0, 1.0, 1.0, 1.0]
+linearization:
+  name: carleman
+  settings: {order: 2}
+integrator: {name: folded_backward_euler}
+qls:
+  name: qsvt_simulator
+  settings: {degree: 31, rcond: 1.0e-12}
+time: {t_final: 0.2, dt: 0.1, n_points: 3}
+output: {directory: outputs/pathway_chain_m3_folded_qsvt, save_plot: true}
+error: {enabled: true}
+complexity: {enabled: true}
+random_seed: 42

@@ -52,6 +52,12 @@ The row sparsity saturates at five for this local chain even as dimension grows.
 This favors sparse-access oracles. It also means a generic dense 54×54 encoder
 throws away the most useful problem structure.
 
+The current sweep script also reports the same scaling in terms of intermediate
+count $m$, where $r=m+1$ and $n=2m+3$. For chained product-to-next-substrate
+pathways, `monolithic_vs_sequential` compares one larger coherent solve against
+separate segment solves with terminal product handoff. This is the first place
+to check whether joining pathways creates a meaningful block-encoding penalty.
+
 ## Exact time/state Kronecker decomposition
 
 Folded BE is exactly
@@ -98,6 +104,21 @@ This is a plausible oracle design, but reversible gate counts for pair ranking,
 coefficient loading, and boundary checks still need compilation before a
 hardware claim.
 
+`structured_block_encoding_estimate` in the generated JSON makes this oracle
+plan machine-readable for every folded system. It records time qubits, lifted
+state qubits, the degree and symmetric-pair register sizes, reaction-index
+qubits, the top-level LCU selector size, the sparse row-degree bound, and the
+component oracle names. These are register/oracle estimates only; they are not
+Toffoli/T-counts.
+
+`oracle_gate_proxy_estimate` adds a first coarse reversible-gate proxy. It
+models the cost of time-shift arithmetic, symmetric pair rank/unrank, reaction
+decoding, sparse row emission, coefficient lookup, and LCU selector controls.
+When a QSVT query estimate is available, the report multiplies the per-query
+proxy by that query count. This is still below a hardware gate count: routing,
+fault-tolerant synthesis, phase synthesis, state preparation, and readout are
+not included.
+
 ## Alternatives and normalization
 
 The QSVT framework of
@@ -136,3 +157,10 @@ Promising next experiments are time-circulant preconditioners, equilibration
 that preserves sparse access, and problem-specific approximate inverses of the
 small 54×54 step block. Their preparation/oracle cost must be included alongside
 the improved $\kappa$.
+
+`scripts/analyze_hardware_path.py --estimate-equilibration` now measures the
+first of these lightweight options: sparse diagonal row/column norm scaling of
+the folded matrix. The generated report includes the scaled condition estimate
+and the corresponding QSVT query proxy. This is a screening experiment for
+condition improvement, not a proof that the diagonal factors can be loaded
+coherently at negligible cost.

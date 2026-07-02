@@ -34,6 +34,7 @@ from qls_testing.qls.classical import ClassicalSolver
 from qls_testing.linearization.carleman import CarlemanLinearization, lift_state
 from qls_testing.linearization.restarted import AdaptiveRestartedCarleman
 from qls_testing.systems.metabolic import build_mass_action_pathway, build_qssa_pathway
+from qls_testing.systems.pathway_family import build_pathway_from_config
 
 # Import modules for their explicit registration side effects.
 import qls_testing.integrators  # noqa: F401,E402
@@ -46,7 +47,14 @@ def run_experiment(config: Config) -> ExperimentResult:
     config.validate()
     np.random.seed(config.random_seed)
     practice_model = None
-    if config.system.name == "mass_action_pathway":
+    if config.pathway is not None or config.system.name == "pathway_graph":
+        if config.pathway is None:
+            raise ValueError("system.name pathway_graph requires a top-level pathway config")
+        polynomial = build_pathway_from_config(
+            config.pathway,
+            initial_substrate=config.system.initial_substrate,
+        )
+    elif config.system.name == "mass_action_pathway":
         polynomial = build_mass_action_pathway(config.system)
     elif config.system.name == "qssa_taylor_pathway":
         polynomial = build_qssa_pathway(config.system)
