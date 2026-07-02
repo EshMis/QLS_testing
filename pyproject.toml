@@ -19,7 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 app = ["streamlit>=1.35", "kaleido>=0.2"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
-quantum = ["pennylane>=0.40"]
+quantum = ["pennylane>=0.40,<0.43"]
 qsp = ["pyqsp>=0.2"]
 
 [project.scripts]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 import numpy as np
 import pennylane as qml
 from pennylane import numpy as qnp
@@ -178,7 +180,7 @@ class PennyLaneVQLSSolver(QuantumLinearSolver):
         if self.shots:
             sampled_device = qml.device(self.backend, wires=qubits)
 
-            @qml.set_shots(shots=self.shots)
+            @partial(qml.set_shots, shots=self.shots)
             @qml.qnode(sampled_device)
             def probability_circuit(sample_weights: qnp.ndarray) -> qnp.ndarray:
                 apply_ansatz(sample_weights)
@@ -189,7 +191,7 @@ class PennyLaneVQLSSolver(QuantumLinearSolver):
                 np.max(np.sqrt(exact_probabilities * (1.0 - exact_probabilities) / self.shots))
             )
         specs = qml.specs(state_circuit)(best_weights)
-        resources = specs.resources
+        resources = specs["resources"]
         return SolveResult(
             solution,
             absolute,

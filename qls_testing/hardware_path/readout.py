@@ -135,6 +135,7 @@ def pennylane_overlap_quadratures(
     preparation and a reversible observable/reference preparation.
     """
     import pennylane as qml
+    from functools import partial
 
     state_vector = np.asarray(state, dtype=complex)
     reference_vector = np.asarray(reference, dtype=complex)
@@ -152,7 +153,7 @@ def pennylane_overlap_quadratures(
     system_wires = tuple(range(1, system_qubits + 1))
     device = qml.device(backend, wires=system_qubits + 1)
 
-    @qml.set_shots(shots=shots)
+    @partial(qml.set_shots, shots=shots)
     @qml.qnode(device)
     def circuit() -> tuple[float, float]:
         qml.Hadamard(wires=ancilla)
